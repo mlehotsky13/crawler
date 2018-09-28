@@ -2,9 +2,17 @@ plugins {
     id 'java-library'
 }
 
+ext {
+	jsoupVersion = '1.10.3'
+}
+
 dependencies {
+	compile(
+		// Jsoup
+		[group: 'org.jsoup', name: 'jsoup', version: jsoupVersion]
+	)
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
 }
