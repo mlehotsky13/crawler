@@ -3,13 +3,19 @@ plugins {
 }
 
 ext {
-	jsoupVersion = '1.10.3'
+	jsoupVersion = '1.11.3'
+	jacksonVersion = '2.9.7'
 }
 
 dependencies {
 	compile(
+
 		// Jsoup
-		[group: 'org.jsoup', name: 'jsoup', version: jsoupVersion]
+		[group: 'org.jsoup', name: 'jsoup', version: jsoupVersion],
+		
+		// Jackson
+        [group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: jacksonVersion],
+        [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: jacksonVersion]
 	)
 }
 
