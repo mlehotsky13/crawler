@@ -1,1 +1,1 @@
-# VINF_I_PROJEKT1
+# School project for class VINF_I
