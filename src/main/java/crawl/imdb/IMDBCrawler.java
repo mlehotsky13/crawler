@@ -23,7 +23,7 @@ public class IMDBCrawler implements Crawler {
 	private static final String SEARCH_TITLE = "search/title";
 	private static final String ALL_GENRES = "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-	private static final List<String> WANTED_GENRES = Arrays.asList("Action", "Adventure", "War");
+	private static final List<String> WANTED_GENRES = Arrays.asList("Action");
 
 	private static final ObjectMapper om = new ObjectMapper();
 
@@ -71,6 +71,7 @@ public class IMDBCrawler implements Crawler {
 		Optional<Integer> titleDuration = getTitleDuration(subtext);
 		Optional<Double> titleRatingValue = getTitleRatingValue(doc);
 		Optional<Integer> titleRatingCount = getTitleRatingCount(doc);
+		Optional<String> titleDirector = getTitleDirector(doc);
 		String titleSummary = doc.selectFirst("div[class=summary_text]").text();
 		ArrayNode titleGenres = getTitleGenres(subtext);
 
@@ -82,6 +83,7 @@ public class IMDBCrawler implements Crawler {
 		titleDuration.ifPresent(td -> on.put("duration", td));
 		titleRatingValue.ifPresent(trv -> on.put("ratingValue", trv));
 		titleRatingCount.ifPresent(trc -> on.put("ratingCount", trc));
+		titleDirector.ifPresent(td -> on.put("director", td));
 		on.put("summary", titleSummary);
 		on.set("genres", titleGenres);
 
@@ -110,6 +112,11 @@ public class IMDBCrawler implements Crawler {
 	private Optional<Integer> getTitleRatingCount(Element element) {
 		return Optional.ofNullable(element.selectFirst("span[itemprop=ratingCount]"))
 				.map(e -> Integer.parseInt(e.text().replace(",", "")));
+	}
+
+	private Optional<String> getTitleDirector(Element element) {
+		return Optional.ofNullable(element.selectFirst("h4:contains(Director:)"))
+				.map(e -> e.nextElementSibling().text());
 	}
 
 	private ArrayNode getTitleGenres(Element element) {
