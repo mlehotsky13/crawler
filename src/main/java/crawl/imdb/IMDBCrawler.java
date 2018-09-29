@@ -36,7 +36,7 @@ public class IMDBCrawler implements Crawler {
 
     for (Element genreItem : genreItems) {
       if (WANTED_GENRES.contains(genreItem.text())) {
-        titles.addAll(parseGenre(BASE_URL + SEARCH_TITLE + genreItem.attr("href"), 1000));
+        titles.addAll(parseGenre(genreItem.attr("abs:href"), 60));
       }
     }
 
@@ -52,7 +52,7 @@ public class IMDBCrawler implements Crawler {
     genreTitles.addAll(parseGenrePage(doc, limit));
 
     while (genreTitles.size() < limit) {
-      doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + doc.selectFirst("a[class=lister-page-next next-page]").attr("href"))
+      doc = Jsoup.connect(doc.selectFirst("a[class=lister-page-next next-page]").attr("abs:href"))
           .userAgent("Mozilla/5.0").timeout(0).get();
       genreTitles.addAll(parseGenrePage(doc, limit));
     }
@@ -67,7 +67,7 @@ public class IMDBCrawler implements Crawler {
         .collect(Collectors.toList());
 
     for (int i = 0; i < titles.size() && i < limit; i++) {
-      genreTitles.add(parseTitle(BASE_URL + titles.get(i).attr("href")));
+      genreTitles.add(parseTitle(titles.get(i).attr("abs:href")));
     }
 
     return genreTitles;
