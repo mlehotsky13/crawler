@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.jsoup.Jsoup;
@@ -24,21 +27,25 @@ public class IMDBCrawler implements Crawler {
     private static final String ALL_GENRES =
             "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-    private static final List<String> WANTED_GENRES = Arrays.asList("Action");
+    private static final List<String> WANTED_GENRES = Arrays.asList("Action", "Adventure", "Animation");
 
     private static final ObjectMapper om = new ObjectMapper();
 
-    public ArrayNode crawlAndSave() throws IOException {
+    public ArrayNode crawlAndSave() throws IOException, InterruptedException {
         ArrayNode titles = om.createArrayNode();
 
         Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
         List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
 
+        ExecutorService es = Executors.newCachedThreadPool();
         for (Element genreItem : genreItems) {
             if (WANTED_GENRES.contains(genreItem.text())) {
-                titles.addAll(parseGenre(genreItem.attr("abs:href"), 5));
+                es.submit(() -> titles.addAll(new IMDBCrawler().parseGenre(genreItem.attr("abs:href"), 10)));
             }
         }
+
+        es.shutdown();
+        es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 
         System.out.println(titles.toString());
 
