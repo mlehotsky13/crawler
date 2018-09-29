@@ -19,114 +19,125 @@ import crawl.Crawler;
 
 public class IMDBCrawler implements Crawler {
 
-	private static final String BASE_URL = "https://www.imdb.com/";
-	private static final String SEARCH_TITLE = "search/title";
-	private static final String ALL_GENRES = "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
+  private static final String BASE_URL = "https://www.imdb.com/";
+  private static final String SEARCH_TITLE = "search/title";
+  private static final String ALL_GENRES =
+      "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-	private static final List<String> WANTED_GENRES = Arrays.asList("Action");
+  private static final List<String> WANTED_GENRES = Arrays.asList("Action");
 
-	private static final ObjectMapper om = new ObjectMapper();
+  private static final ObjectMapper om = new ObjectMapper();
 
-	public ArrayNode crawlAndSave() throws IOException {
-		ArrayNode titles = om.createArrayNode();
+  public ArrayNode crawlAndSave() throws IOException {
+    ArrayNode titles = om.createArrayNode();
 
-		Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
-		List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
+    Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
+    List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
 
-		for (Element genreItem : genreItems) {
-			if (WANTED_GENRES.contains(genreItem.text())) {
-				titles.addAll(parseGenre(BASE_URL + SEARCH_TITLE + genreItem.attr("href")));
-			}
-		}
+    for (Element genreItem : genreItems) {
+      if (WANTED_GENRES.contains(genreItem.text())) {
+        titles.addAll(parseGenre(BASE_URL + SEARCH_TITLE + genreItem.attr("href"), 1000));
+      }
+    }
 
-		System.out.println(titles.toString());
+    System.out.println(titles.toString());
 
-		return titles;
-	}
+    return titles;
+  }
 
-	private ArrayNode parseGenre(String url) throws IOException {
-		ArrayNode genreTitles = om.createArrayNode();
+  private ArrayNode parseGenre(String url, int limit) throws IOException {
+    ArrayNode genreTitles = om.createArrayNode();
 
-		Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
-		List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream()
-				.map(div -> div.selectFirst("a")).collect(Collectors.toList());
+    Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
+    genreTitles.addAll(parseGenrePage(doc, limit));
 
-		for (Element title : titles) {
-			genreTitles.add(parseTitle(BASE_URL + title.attr("href")));
-		}
+    while (genreTitles.size() < limit) {
+      doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + doc.selectFirst("a[class=lister-page-next next-page]").attr("href"))
+          .userAgent("Mozilla/5.0").timeout(0).get();
+      genreTitles.addAll(parseGenrePage(doc, limit));
+    }
 
-		// System.out.println(genreTitles.toString());
+    return genreTitles;
+  }
 
-		return genreTitles;
-	}
+  private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
+    ArrayNode genreTitles = om.createArrayNode();
 
-	private JsonNode parseTitle(String url) throws IOException {
-		Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
+    List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a"))
+        .collect(Collectors.toList());
 
-		Element heading = doc.selectFirst("h1");
-		Element subtext = doc.selectFirst("div[class=subtext]");
+    for (int i = 0; i < titles.size() && i < limit; i++) {
+      genreTitles.add(parseTitle(BASE_URL + titles.get(i).attr("href")));
+    }
 
-		String titleName = getTitleName(doc);
-		Optional<Integer> titleYear = getTitleYear(heading);
-		Optional<Integer> titleDuration = getTitleDuration(subtext);
-		Optional<Double> titleRatingValue = getTitleRatingValue(doc);
-		Optional<Integer> titleRatingCount = getTitleRatingCount(doc);
-		Optional<String> titleDirector = getTitleDirector(doc);
-		String titleSummary = doc.selectFirst("div[class=summary_text]").text();
-		ArrayNode titleGenres = getTitleGenres(subtext);
+    return genreTitles;
+  }
 
-		ObjectMapper om = new ObjectMapper();
-		ObjectNode on = om.createObjectNode();
+  private JsonNode parseTitle(String url) throws IOException {
+    Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
 
-		on.put("name", titleName);
-		titleYear.ifPresent(ty -> on.put("year", ty));
-		titleDuration.ifPresent(td -> on.put("duration", td));
-		titleRatingValue.ifPresent(trv -> on.put("ratingValue", trv));
-		titleRatingCount.ifPresent(trc -> on.put("ratingCount", trc));
-		titleDirector.ifPresent(td -> on.put("director", td));
-		on.put("summary", titleSummary);
-		on.set("genres", titleGenres);
+    Element heading = doc.selectFirst("h1");
+    Element subtext = doc.selectFirst("div[class=subtext]");
 
-		return on;
-	}
+    String titleName = getTitleName(doc);
+    Optional<Integer> titleYear = getTitleYear(heading);
+    Optional<Integer> titleDuration = getTitleDuration(subtext);
+    Optional<Double> titleRatingValue = getTitleRatingValue(doc);
+    Optional<Integer> titleRatingCount = getTitleRatingCount(doc);
+    Optional<String> titleDirector = getTitleDirector(doc);
+    String titleSummary = doc.selectFirst("div[class=summary_text]").text();
+    ArrayNode titleGenres = getTitleGenres(subtext);
 
-	private String getTitleName(Element element) {
-		return Optional.ofNullable(element.selectFirst("div[class=originalTitle]")).map(e -> e.ownText())
-				.orElse(element.selectFirst("h1").ownText());
-	}
+    ObjectNode on = om.createObjectNode();
 
-	private Optional<Integer> getTitleYear(Element element) {
-		return Optional.ofNullable(element.selectFirst("a")).map(e -> Integer.parseInt(e.text()));
-	}
+    on.put("name", titleName);
+    titleYear.ifPresent(ty -> on.put("year", ty));
+    titleDuration.ifPresent(td -> on.put("duration", td));
+    titleRatingValue.ifPresent(trv -> on.put("ratingValue", trv));
+    titleRatingCount.ifPresent(trc -> on.put("ratingCount", trc));
+    titleDirector.ifPresent(td -> on.put("director", td));
+    on.put("summary", titleSummary);
+    on.set("genres", titleGenres);
 
-	private Optional<Integer> getTitleDuration(Element element) {
-		return Optional.ofNullable(element.selectFirst("time"))
-				.map(e -> Integer.parseInt(e.attr("datetime").replaceAll("\\D", "")));
-	}
+    return on;
+  }
 
-	private Optional<Double> getTitleRatingValue(Element element) {
-		return Optional.ofNullable(element.selectFirst("span[itemprop=ratingValue]"))
-				.map(e -> Double.parseDouble(e.text()));
-	}
+  private String getTitleName(Element element) {
+    return Optional.ofNullable(element.selectFirst("div[class=originalTitle]")).map(e -> e.ownText())
+        .orElse(element.selectFirst("h1").ownText());
+  }
 
-	private Optional<Integer> getTitleRatingCount(Element element) {
-		return Optional.ofNullable(element.selectFirst("span[itemprop=ratingCount]"))
-				.map(e -> Integer.parseInt(e.text().replace(",", "")));
-	}
+  private Optional<Integer> getTitleYear(Element element) {
+    return Optional.ofNullable(element.selectFirst("a")).map(e -> Integer.parseInt(e.text()));
+  }
 
-	private Optional<String> getTitleDirector(Element element) {
-		return Optional.ofNullable(element.selectFirst("h4:contains(Director:)"))
-				.map(e -> e.nextElementSibling().text());
-	}
+  private Optional<Integer> getTitleDuration(Element element) {
+    return Optional.ofNullable(element.selectFirst("time"))
+        .map(e -> Integer.parseInt(e.attr("datetime").replaceAll("\\D", "")));
+  }
 
-	private ArrayNode getTitleGenres(Element element) {
-		ArrayNode titleGenres = om.createArrayNode();
+  private Optional<Double> getTitleRatingValue(Element element) {
+    return Optional.ofNullable(element.selectFirst("span[itemprop=ratingValue]"))
+        .map(e -> Double.parseDouble(e.text()));
+  }
 
-		List<Element> aElements = element.select("a");
-		for (int i = 0; i < aElements.size() - 1; i++) {
-			titleGenres.add(aElements.get(i).text());
-		}
+  private Optional<Integer> getTitleRatingCount(Element element) {
+    return Optional.ofNullable(element.selectFirst("span[itemprop=ratingCount]"))
+        .map(e -> Integer.parseInt(e.text().replace(",", "")));
+  }
 
-		return titleGenres;
-	}
+  private Optional<String> getTitleDirector(Element element) {
+    return Optional.ofNullable(element.selectFirst("h4:contains(Director:)")).map(e -> e.nextElementSibling().text());
+  }
+
+  private ArrayNode getTitleGenres(Element element) {
+    ArrayNode titleGenres = om.createArrayNode();
+
+    List<Element> aElements = element.select("a");
+    for (int i = 0; i < aElements.size() - 1; i++) {
+      titleGenres.add(aElements.get(i).text());
+    }
+
+    return titleGenres;
+  }
 }
