@@ -86,8 +86,10 @@ public class IMDBCrawler implements Crawler {
         getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
         getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
         getTitleDirector(scriptNode).ifPresent(v -> on.set("director", v));
-        getTitleDescription(doc).ifPresent(v -> on.put("description", v));
+        getTitleActors(scriptNode).ifPresent(v -> on.set("actors", v));
         getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
+        getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
+        getTitleDescription(doc).ifPresent(v -> on.put("description", v));
 
         return on;
     }
@@ -116,11 +118,21 @@ public class IMDBCrawler implements Crawler {
         return Optional.ofNullable(node.get("director"));
     }
 
+    private Optional<JsonNode> getTitleActors(JsonNode node) {
+        return Optional.ofNullable(node.get("actor"));
+    }
+
+
     private Optional<JsonNode> getTitleGenres(JsonNode node) {
         return Optional.ofNullable(node.get("genres"));
+    }
+
+    private Optional<JsonNode> getTitleKeywords(JsonNode node) {
+        return Optional.ofNullable(node.get("keywords"));
     }
 
     private Optional<String> getTitleDescription(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
     }
+
 }
