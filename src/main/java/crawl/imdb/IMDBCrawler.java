@@ -1,6 +1,10 @@
 package crawl.imdb;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -31,28 +35,22 @@ public class IMDBCrawler implements Crawler {
 
     private static final ObjectMapper om = new ObjectMapper();
 
-    public ArrayNode crawlAndSave() throws IOException, InterruptedException {
-        ArrayNode titles = om.createArrayNode();
-
+    public void crawlAndSave() throws IOException, InterruptedException {
         Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
         List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
 
         ExecutorService es = Executors.newCachedThreadPool();
         for (Element genreItem : genreItems) {
             if (WANTED_GENRES.contains(genreItem.text())) {
-                es.submit(() -> titles.addAll(new IMDBCrawler().parseGenre(genreItem.attr("abs:href"), 10)));
+                es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
             }
         }
 
         es.shutdown();
         es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-
-        System.out.println(titles.toString());
-
-        return titles;
     }
 
-    private ArrayNode parseGenre(String url, int limit) throws IOException {
+    private int parseGenre(String genre, String url, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
         Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
@@ -64,7 +62,12 @@ public class IMDBCrawler implements Crawler {
             genreTitles.addAll(parseGenrePage(doc, limit));
         }
 
-        return genreTitles;
+        Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
+        try (BufferedWriter bw = Files.newBufferedWriter(genreFile)) {
+            bw.append(genreTitles.toString());
+        }
+        
+        return genreTitles.size();
     }
 
     private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
@@ -129,7 +132,6 @@ public class IMDBCrawler implements Crawler {
         return Optional.ofNullable(node.get("actor"));
     }
 
-
     private Optional<JsonNode> getTitleGenres(JsonNode node) {
         return Optional.ofNullable(node.get("genres"));
     }
@@ -141,5 +143,4 @@ public class IMDBCrawler implements Crawler {
     private Optional<String> getTitleDescription(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
     }
-
 }
