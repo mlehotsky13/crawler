@@ -53,6 +53,8 @@ public class IMDBCrawler implements Crawler {
     private int parseGenre(String genre, String url, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
+        System.out.println("Parsing genre " + genre + " ...");
+
         Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
         genreTitles.addAll(parseGenrePage(doc, limit));
 
@@ -148,9 +150,11 @@ public class IMDBCrawler implements Crawler {
     }
 
     private void writeToFile(Path p, String s) throws IOException {
+        
+        System.out.println("Writing to file ...");
+        
         try (BufferedWriter bw = Files.newBufferedWriter(p)) {
             bw.append(s);
-            bw.flush();
         }
     }
 
