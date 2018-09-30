@@ -39,7 +39,7 @@ public class IMDBCrawler implements Crawler {
         Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
         List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
 
-        ExecutorService es = Executors.newFixedThreadPool(30);
+        ExecutorService es = Executors.newCachedThreadPool();
         for (Element genreItem : genreItems) {
             if (!NOT_WANTED_GENRES.contains(genreItem.text())) {
                 es.submit(() -> parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
@@ -53,14 +53,11 @@ public class IMDBCrawler implements Crawler {
     private int parseGenre(String genre, String url, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
-        System.out.println("Parsing genre " + genre + " ...");
-
         Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
         genreTitles.addAll(parseGenrePage(doc, limit));
 
-        while (genreTitles.size() < limit) {
-            doc = Jsoup.connect(doc.selectFirst("a[class=lister-page-next next-page]").attr("abs:href"))
-                    .userAgent("Mozilla/5.0").timeout(0).get();
+        while ((url = getNextPage(doc)) != null && genreTitles.size() < limit) {
+            doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
             genreTitles.addAll(parseGenrePage(doc, limit));
         }
 
@@ -155,5 +152,10 @@ public class IMDBCrawler implements Crawler {
             bw.append(s);
             bw.flush();
         }
+    }
+
+    private String getNextPage(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
+                .orElse(null);
     }
 }
