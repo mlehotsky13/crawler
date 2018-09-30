@@ -31,7 +31,7 @@ public class IMDBCrawler implements Crawler {
     private static final String ALL_GENRES =
             "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-    private static final List<String> WANTED_GENRES = Arrays.asList("Action", "Adventure", "Animation");
+    private static final List<String> NOT_WANTED_GENRES = Arrays.asList();
 
     private static final ObjectMapper om = new ObjectMapper();
 
@@ -39,10 +39,10 @@ public class IMDBCrawler implements Crawler {
         Document doc = Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").timeout(0).get();
         List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
 
-        ExecutorService es = Executors.newCachedThreadPool();
+        ExecutorService es = Executors.newFixedThreadPool(30);
         for (Element genreItem : genreItems) {
-            if (WANTED_GENRES.contains(genreItem.text())) {
-                es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
+            if (!NOT_WANTED_GENRES.contains(genreItem.text())) {
+                es.submit(() -> parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
             }
         }
 
@@ -52,6 +52,8 @@ public class IMDBCrawler implements Crawler {
 
     private int parseGenre(String genre, String url, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
+
+        System.out.println("Parsing genre " + genre + " ...");
 
         Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
         genreTitles.addAll(parseGenrePage(doc, limit));
@@ -63,10 +65,8 @@ public class IMDBCrawler implements Crawler {
         }
 
         Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
-        try (BufferedWriter bw = Files.newBufferedWriter(genreFile)) {
-            bw.append(genreTitles.toString());
-        }
-        
+        writeToFile(genreFile, genreTitles.toString());
+
         return genreTitles.size();
     }
 
@@ -100,6 +100,12 @@ public class IMDBCrawler implements Crawler {
         getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
         getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
         getTitleDescription(doc).ifPresent(v -> on.put("description", v));
+
+        // try {
+        // Thread.currentThread().sleep(1000);
+        // } catch (Exception e) {
+        // e.printStackTrace();
+        // }
 
         return on;
     }
@@ -142,5 +148,12 @@ public class IMDBCrawler implements Crawler {
 
     private Optional<String> getTitleDescription(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
+    }
+
+    private void writeToFile(Path p, String s) throws IOException {
+        try (BufferedWriter bw = Files.newBufferedWriter(p)) {
+            bw.append(s);
+            bw.flush();
+        }
     }
 }
