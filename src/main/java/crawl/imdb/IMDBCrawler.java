@@ -72,12 +72,13 @@ public class IMDBCrawler implements Crawler {
     private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
-        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream()
-                .map(div -> div.selectFirst("a")).collect(Collectors.toList());
+        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a")).collect(Collectors.toList());
 
         for (int i = 0; i < titles.size() && i < limit; i++) {
             genreTitles.add(parseTitle(titles.get(i).attr("abs:href")));
         }
+
+        System.out.println("Parsed genre page with " + genreTitles.size() + " titles.");
 
         return genreTitles;
     }
@@ -145,21 +146,31 @@ public class IMDBCrawler implements Crawler {
         return Optional.ofNullable(node.get("keywords"));
     }
 
-    private Optional<String> getTitleDescription(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
+    private Optional<String> getTitleDescription(Document doc) throws IOException {
+        Element descDiv = doc.selectFirst("div[class=summary_text]");
+
+        if (descDiv != null && descDiv.selectFirst("a") != null) {
+            return Optional.ofNullable(getFullTitleDescription(descDiv));
+        }
+
+        return Optional.ofNullable(descDiv).map(v -> v.text());
+    }
+
+    private String getFullTitleDescription(Element element) throws IOException {
+        Document summaryDoc = Jsoup.connect(element.selectFirst("a").attr("abs:href")).userAgent("Mozilla/5.0").timeout(0).get();
+        return summaryDoc.selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text();
     }
 
     private void writeToFile(Path p, String s) throws IOException {
-        
+
         System.out.println("Writing to file ...");
-        
+
         try (BufferedWriter bw = Files.newBufferedWriter(p)) {
             bw.append(s);
         }
     }
 
     private String getNextPage(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
-                .orElse(null);
+        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href")).orElse(null);
     }
 }
