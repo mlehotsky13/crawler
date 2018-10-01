@@ -55,16 +55,18 @@ public class IMDBCrawler implements Crawler {
 
         System.out.println("Parsing genre " + genre + " ...");
 
-        Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
-        genreTitles.addAll(parseGenrePage(doc, limit));
-
-        while ((url = getNextPage(doc)) != null && genreTitles.size() < limit) {
-            doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
+        try {
+            Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
             genreTitles.addAll(parseGenrePage(doc, limit));
-        }
 
-        Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
-        writeToFile(genreFile, genreTitles.toString());
+            while ((url = getNextPage(doc)) != null && genreTitles.size() < limit) {
+                doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
+                genreTitles.addAll(parseGenrePage(doc, limit));
+            }
+        } finally {
+            Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
+            writeToFile(genreFile, genreTitles.toString());
+        }
 
         return genreTitles.size();
     }
