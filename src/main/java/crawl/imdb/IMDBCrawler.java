@@ -72,7 +72,8 @@ public class IMDBCrawler implements Crawler {
     private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
-        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a")).collect(Collectors.toList());
+        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a"))
+                .collect(Collectors.toList());
 
         for (int i = 0; i < titles.size() && i < limit; i++) {
             genreTitles.add(parseTitle(titles.get(i).attr("abs:href")));
@@ -150,15 +151,22 @@ public class IMDBCrawler implements Crawler {
         Element descDiv = doc.selectFirst("div[class=summary_text]");
 
         if (descDiv != null && descDiv.selectFirst("a") != null) {
-            return Optional.ofNullable(getFullTitleDescription(descDiv));
+            return getFullTitleDescription(descDiv);
         }
 
         return Optional.ofNullable(descDiv).map(v -> v.text());
     }
 
-    private String getFullTitleDescription(Element element) throws IOException {
-        Document summaryDoc = Jsoup.connect(element.selectFirst("a:contains(See full summary)").attr("abs:href")).userAgent("Mozilla/5.0").timeout(0).get();
-        return summaryDoc.selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text();
+    private Optional<String> getFullTitleDescription(Element element) throws IOException {
+        Optional<String> fullSummaryURL =
+                Optional.ofNullable(element.selectFirst("a:contains(See full summary)")).map(v -> v.attr("abs:href"));
+
+        if (fullSummaryURL.isPresent()) {
+            Document summaryDoc = Jsoup.connect(fullSummaryURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
+            return Optional.of(summaryDoc.selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text());
+        }
+
+        return Optional.empty();
     }
 
     private void writeToFile(Path p, String s) throws IOException {
@@ -171,6 +179,7 @@ public class IMDBCrawler implements Crawler {
     }
 
     private String getNextPage(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href")).orElse(null);
+        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
+                .orElse(null);
     }
 }
