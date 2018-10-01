@@ -157,7 +157,7 @@ public class IMDBCrawler implements Crawler {
     }
 
     private String getFullTitleDescription(Element element) throws IOException {
-        Document summaryDoc = Jsoup.connect(element.selectFirst("a").attr("abs:href")).userAgent("Mozilla/5.0").timeout(0).get();
+        Document summaryDoc = Jsoup.connect(element.selectFirst("a:contains(See full summary)").attr("abs:href")).userAgent("Mozilla/5.0").timeout(0).get();
         return summaryDoc.selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text();
     }
 
