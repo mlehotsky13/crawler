@@ -1,8 +1,6 @@
 package crawl.imdb;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -169,15 +167,6 @@ public class IMDBCrawler extends AbstractCrawler {
         }
 
         return Optional.empty();
-    }
-
-    private void writeToFile(Path p, String s) throws IOException {
-
-        System.out.println("Writing to file ...");
-
-        try (BufferedWriter bw = Files.newBufferedWriter(p)) {
-            bw.append(s);
-        }
     }
 
     private String getNextPage(Document doc) {
