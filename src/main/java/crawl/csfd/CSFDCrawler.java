@@ -26,8 +26,8 @@ public class CSFDCrawler extends AbstractCrawler {
 
     public void crawlAndSave() throws IOException {
         Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").timeout(0).get();
-        ArrayNode films = parseFilmLibrary(doc, 150);
-
+        ArrayNode films = parseFilmLibrary(doc, 1000);
+        
         writeToFile(Paths.get("src/main/resources/data/csfd-films.json"), films.toString());
     }
 
@@ -46,6 +46,8 @@ public class CSFDCrawler extends AbstractCrawler {
             Document nextPage = Jsoup.connect(nextPageURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
             an.addAll(parsePage(nextPage, limit - an.size()));
         }
+        
+        System.out.println("Parsed film library with " + an.size() + " films.");
 
         return an;
     }
@@ -62,6 +64,8 @@ public class CSFDCrawler extends AbstractCrawler {
 
             parseFilmIfValid(filmDoc).ifPresent(v -> an.add(v));
         }
+        
+        System.out.println("Parsed page with " + an.size() + " films.");
 
         return an;
     }
@@ -86,8 +90,6 @@ public class CSFDCrawler extends AbstractCrawler {
         on.set("scenar", getFilmScenarists(doc));
         on.set("hraju", getFilmActors(doc));
         on.put("obsah", getFilmContent(doc));
-
-        System.out.println("Parsed film");
 
         return on;
     }
