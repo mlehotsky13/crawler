@@ -27,7 +27,7 @@ public class CSFDCrawler extends AbstractCrawler {
     public void crawlAndSave() throws IOException {
         Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").timeout(0).get();
         ArrayNode films = parseFilmLibrary(doc, 1000);
-        
+
         writeToFile(Paths.get("src/main/resources/data/csfd-films.json"), films.toString());
     }
 
@@ -46,7 +46,7 @@ public class CSFDCrawler extends AbstractCrawler {
             Document nextPage = Jsoup.connect(nextPageURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
             an.addAll(parsePage(nextPage, limit - an.size()));
         }
-        
+
         System.out.println("Parsed film library with " + an.size() + " films.");
 
         return an;
@@ -64,7 +64,7 @@ public class CSFDCrawler extends AbstractCrawler {
 
             parseFilmIfValid(filmDoc).ifPresent(v -> an.add(v));
         }
-        
+
         System.out.println("Parsed page with " + an.size() + " films.");
 
         return an;
@@ -75,7 +75,8 @@ public class CSFDCrawler extends AbstractCrawler {
     }
 
     private boolean isWantedFilm(Document doc) {
-        return !Arrays.asList("(epizoda)", "(série)").contains(doc.selectFirst("span[class=film-type]").ownText());
+        return Optional.ofNullable(doc.selectFirst("span[class=film-type]"))
+                .map(v -> !Arrays.asList("(epizoda)", "(série)").contains(v.ownText())).orElse(true);
     }
 
     private JsonNode parseFilm(Document doc) {
@@ -90,6 +91,7 @@ public class CSFDCrawler extends AbstractCrawler {
         on.set("scenar", getFilmScenarists(doc));
         on.set("hraju", getFilmActors(doc));
         on.put("obsah", getFilmContent(doc));
+        on.set("rating", getFilmRating(doc));
 
         return on;
     }
@@ -176,5 +178,19 @@ public class CSFDCrawler extends AbstractCrawler {
 
     private String getFilmContent(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[data-truncate=570]")).map(v -> v.ownText()).orElse("");
+    }
+
+    private ObjectNode getFilmRating(Document doc) {
+        ObjectNode on = om.createObjectNode();
+
+        Element rating = doc.selectFirst("div[id=rating]");
+        List<Element> meta = rating.select("meta");
+        on.put("average", rating.selectFirst("h2[class=average]").ownText());
+
+        for (Element m : meta) {
+            on.put(m.attr("itemprop"), m.attr("content"));
+        }
+
+        return on;
     }
 }
