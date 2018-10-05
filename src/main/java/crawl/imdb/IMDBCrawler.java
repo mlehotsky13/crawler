@@ -22,9 +22,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import crawl.Crawler;
+import crawl.AbstractCrawler;
 
-public class IMDBCrawler implements Crawler {
+public class IMDBCrawler extends AbstractCrawler {
 
     private static final String BASE_URL = "https://www.imdb.com/";
     private static final String SEARCH_TITLE = "search/title";

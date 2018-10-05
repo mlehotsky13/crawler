@@ -1,9 +1,6 @@
 package crawl.csfd;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
@@ -18,9 +15,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import crawl.Crawler;
+import crawl.AbstractCrawler;
 
-public class CSFDCrawler implements Crawler {
+public class CSFDCrawler extends AbstractCrawler {
 
     private static final String BASE_URL =
             "https://www.csfd.cz/filmoteky/?format%5B%5D=0&quality%5B%5D=0&genre%5B%5D=0&film=&user=&ok=Zobrazit&_form_=collection";
@@ -178,14 +175,4 @@ public class CSFDCrawler implements Crawler {
     private String getFilmContent(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[data-truncate=570]")).map(v -> v.ownText()).orElse("");
     }
-
-    private void writeToFile(Path p, String s) throws IOException {
-
-        System.out.println("Writing to file ...");
-
-        try (BufferedWriter bw = Files.newBufferedWriter(p)) {
-            bw.append(s);
-        }
-    }
-
 }
