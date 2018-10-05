@@ -19,19 +19,35 @@ import crawl.AbstractCrawler;
 
 public class CSFDCrawler extends AbstractCrawler {
 
-    private static final String BASE_URL =
-            "https://www.csfd.cz/filmoteky/?format%5B%5D=0&quality%5B%5D=0&genre%5B%5D=0&film=&user=&ok=Zobrazit&_form_=collection";
+    private static final String FILM_URL = "https://www.csfd.cz/film/REPLACE/prehled/";
 
     private static final ObjectMapper om = new ObjectMapper();
 
-    public void crawlAndSave() throws IOException {
-        Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").timeout(0).get();
-        ArrayNode films = parseFilmLibrary(doc, 1000);
+    private static int count = 4;
 
-        writeToFile(Paths.get("src/main/resources/data/csfd-films.json"), films.toString());
+
+    public void crawlAndSave() throws IOException {
+        ArrayNode films = om.createArrayNode();
+
+        for (int i = 3000; i < 658_762; i++) {
+            try {
+                Document doc = Jsoup.connect(FILM_URL.replaceFirst("REPLACE", String.valueOf(i))).get();
+                films.add(parseFilm(doc));
+
+                if (films.size() > 999) {
+                    writeToFile(Paths.get("src/main/resources/data/csfd/csfd-films_" + count + ".json"), films.toString());
+                    films.removeAll();
+                    count++;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        writeToFile(Paths.get("src/main/resources/data/csfd/csfd-films_" + count + ".json"), films.toString());
     }
 
-    private ArrayNode parseFilmLibrary(Document doc, int limit) throws IOException {
+    private void parseFilmLibrary(Document doc, int limit) throws IOException {
         ArrayNode an = om.createArrayNode();
 
         an.addAll(parsePage(doc, limit));
@@ -45,11 +61,15 @@ public class CSFDCrawler extends AbstractCrawler {
 
             Document nextPage = Jsoup.connect(nextPageURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
             an.addAll(parsePage(nextPage, limit - an.size()));
+
+            if (an.size() >= 1000) {
+                writeToFile(Paths.get("src/main/resources/data/csfd-films_" + count + ".json"), an.toString());
+                an.removeAll();
+                count++;
+            }
         }
 
         System.out.println("Parsed film library with " + an.size() + " films.");
-
-        return an;
     }
 
     private ArrayNode parsePage(Document doc, int limit) throws IOException {
@@ -177,7 +197,7 @@ public class CSFDCrawler extends AbstractCrawler {
     }
 
     private String getFilmContent(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("div[data-truncate=570]")).map(v -> v.ownText()).orElse("");
+        return Optional.ofNullable(doc.selectFirst("div[data-truncate=570]")).map(v -> v.text()).orElse("");
     }
 
     private ObjectNode getFilmRating(Document doc) {
