@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,10 +29,8 @@ public class CSFDCrawler implements Crawler {
 
     public void crawlAndSave() throws IOException {
         Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").timeout(0).get();
-        ArrayNode films = parseFilmLibrary(doc, 10);
+        ArrayNode films = parseFilmLibrary(doc, 150);
 
-        // System.out.println(films.toString());
-        
         writeToFile(Paths.get("src/main/resources/data/csfd-films.json"), films.toString());
     }
 
@@ -64,10 +63,18 @@ public class CSFDCrawler implements Crawler {
             String filmURL = rows.get(i).selectFirst("a").attr("abs:href");
             Document filmDoc = Jsoup.connect(filmURL).userAgent("Mozilla/5.0").timeout(0).get();
 
-            an.add(parseFilm(filmDoc));
+            parseFilmIfValid(filmDoc).ifPresent(v -> an.add(v));
         }
 
         return an;
+    }
+
+    private Optional<JsonNode> parseFilmIfValid(Document doc) {
+        return isWantedFilm(doc) ? Optional.of(parseFilm(doc)) : Optional.empty();
+    }
+
+    private boolean isWantedFilm(Document doc) {
+        return !Arrays.asList("(epizoda)", "(série)").contains(doc.selectFirst("span[class=film-type]").ownText());
     }
 
     private JsonNode parseFilm(Document doc) {
