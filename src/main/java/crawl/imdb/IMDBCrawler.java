@@ -29,7 +29,7 @@ public class IMDBCrawler extends AbstractCrawler {
     private static final String ALL_GENRES =
             "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-    private static final List<String> NOT_WANTED_GENRES = Arrays.asList();
+    private static final List<String> NOT_WANTED_GENRES = Arrays.asList("Action");
 
     private static final ObjectMapper om = new ObjectMapper();
 
@@ -39,7 +39,7 @@ public class IMDBCrawler extends AbstractCrawler {
 
         ExecutorService es = Executors.newCachedThreadPool();
         for (Element genreItem : genreItems) {
-            if (!NOT_WANTED_GENRES.contains(genreItem.text())) {
+            if (NOT_WANTED_GENRES.contains(genreItem.text())) {
                 es.submit(() -> parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
             }
         }
@@ -62,7 +62,8 @@ public class IMDBCrawler extends AbstractCrawler {
                 genreTitles.addAll(parseGenrePage(doc, limit));
             }
         } finally {
-            Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
+            // Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
+            Path genreFile = Paths.get("/home/miroslav/Desktop/ " + genre.toLowerCase() + ".json");
             writeToFile(genreFile, genreTitles.toString());
         }
 
@@ -97,10 +98,10 @@ public class IMDBCrawler extends AbstractCrawler {
         getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
         getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
         getTitleDirector(scriptNode).ifPresent(v -> on.set("director", v));
-        getTitleActors(scriptNode).ifPresent(v -> on.set("actors", v));
         getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
         getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
         getTitleDescription(doc).ifPresent(v -> on.put("description", v));
+        on.set("cast", getCast(doc));
 
         // try {
         // Thread.currentThread().sleep(1000);
@@ -172,5 +173,57 @@ public class IMDBCrawler extends AbstractCrawler {
     private String getNextPage(Document doc) {
         return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
                 .orElse(null);
+    }
+
+    private JsonNode getCast(Document doc) throws IOException {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Document> castDoc = getCastDoc(doc);
+        if (castDoc.isPresent()) {
+            an = parseFullCast(castDoc.get());
+        }
+
+        return an;
+    }
+
+    private Optional<Document> getCastDoc(Document doc) {
+        return getFullCastURL(doc).map(v -> {
+            Document castDoc = null;
+            try {
+                castDoc = Jsoup.connect(v).userAgent("Mozilla/5.0").timeout(0).get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            return castDoc;
+        });
+    }
+
+    private Optional<String> getFullCastURL(Document doc) {
+        return doc.select("div[class=see-more]").stream().filter(v -> v.selectFirst("a:contains(See full cast)") != null).limit(1)
+                .map(v -> v.selectFirst("a").attr("abs:href")).findFirst();
+    }
+
+    private ArrayNode parseFullCast(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> table = Optional.ofNullable(doc.selectFirst("table[class=cast_list]"));
+        if (table.isPresent()) {
+            List<Element> validCastRows = getValidCastRows(table.get());
+            for (Element row : validCastRows) {
+                ObjectNode on = om.createObjectNode();
+                on.put("name", row.select("td").get(1).text());
+                on.put("character", row.selectFirst("td[class=character]").text());
+
+                an.add(on);
+            }
+        }
+
+        return an;
+    }
+
+    private List<Element> getValidCastRows(Element element) {
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=character]") != null)
+                .collect(Collectors.toList());
     }
 }
