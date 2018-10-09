@@ -2,7 +2,6 @@ package main;
 
 import java.io.IOException;
 
-import crawl.Crawler;
 import crawl.csfd.CSFDCrawler;
 
 public class MainClass {
@@ -10,8 +9,9 @@ public class MainClass {
 
         long start = System.currentTimeMillis();
 
-        Crawler crawler = new CSFDCrawler();
+        CSFDCrawler crawler = new CSFDCrawler();
         crawler.crawlAndSave();
+        // crawler.downloadPages();
 
         long duration = System.currentTimeMillis() - start;
 

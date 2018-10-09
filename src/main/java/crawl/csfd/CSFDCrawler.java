@@ -1,15 +1,21 @@
 package crawl.csfd;
 
-import java.io.IOException;
+import static io.restassured.RestAssured.given;
+
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,71 +29,57 @@ public class CSFDCrawler extends AbstractCrawler {
 
     private static final ObjectMapper om = new ObjectMapper();
 
-    private static int count = 4;
+    private static final String PAGES_FOLDER = "/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/csfd_pages";
 
+    private static int count = 1;
 
-    public void crawlAndSave() throws IOException {
+    public void crawlAndSave() throws InterruptedException, JsonProcessingException {
         ArrayNode films = om.createArrayNode();
 
-        for (int i = 3000; i < 658_762; i++) {
-            try {
-                Document doc = Jsoup.connect(FILM_URL.replaceFirst("REPLACE", String.valueOf(i))).get();
-                films.add(parseFilm(doc));
+        for (int i = 1; i < 600_000; i++) {
+            String docString = readFile(Paths.get(PAGES_FOLDER, "csfd_page" + i + ".html"));
+            Document doc = Jsoup.parse(docString);
 
-                if (films.size() > 999) {
-                    writeToFile(Paths.get("src/main/resources/data/csfd/csfd-films_" + count + ".json"), films.toString());
-                    films.removeAll();
-                    count++;
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+            parseFilmIfValid(doc).ifPresent(v -> films.add(v));
 
-        writeToFile(Paths.get("src/main/resources/data/csfd/csfd-films_" + count + ".json"), films.toString());
-    }
-
-    private void parseFilmLibrary(Document doc, int limit) throws IOException {
-        ArrayNode an = om.createArrayNode();
-
-        an.addAll(parsePage(doc, limit));
-        while (an.size() < limit) {
-            Optional<String> nextPageURL =
-                    Optional.ofNullable(doc.selectFirst("a[class=button]:contains(další)")).map(v -> v.attr("abs:href"));
-
-            if (!nextPageURL.isPresent()) {
-                break;
-            }
-
-            Document nextPage = Jsoup.connect(nextPageURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
-            an.addAll(parsePage(nextPage, limit - an.size()));
-
-            if (an.size() >= 1000) {
-                writeToFile(Paths.get("src/main/resources/data/csfd-films_" + count + ".json"), an.toString());
-                an.removeAll();
+            if (films.size() > 999) {
+                writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"), films.toString());
+                films.removeAll();
                 count++;
             }
         }
 
-        System.out.println("Parsed film library with " + an.size() + " films.");
+        writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"), films.toString());
     }
 
-    private ArrayNode parsePage(Document doc, int limit) throws IOException {
-        ArrayNode an = om.createArrayNode();
+    public void downloadPages() throws InterruptedException {
+        ExecutorService es = Executors.newCachedThreadPool();
 
-        Element table = doc.selectFirst("table[class=ui-table-list]");
-        List<Element> rows = table.select("tr");
+        es.submit(() -> downloadPagesFromTo(500_000, 520_000));
+        es.submit(() -> downloadPagesFromTo(520_000, 540_000));
+        es.submit(() -> downloadPagesFromTo(540_000, 560_000));
+        es.submit(() -> downloadPagesFromTo(560_000, 580_000));
+        es.submit(() -> downloadPagesFromTo(580_000, 600_000));
 
-        for (int i = 1; i < rows.size() && i <= limit; i++) {
-            String filmURL = rows.get(i).selectFirst("a").attr("abs:href");
-            Document filmDoc = Jsoup.connect(filmURL).userAgent("Mozilla/5.0").timeout(0).get();
+        es.shutdown();
+        es.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+    }
 
-            parseFilmIfValid(filmDoc).ifPresent(v -> an.add(v));
+    private void downloadPagesFromTo(int from, int to) {
+        for (int i = from; i < to; i++) {
+            try {
+                String pageUrl = FILM_URL.replace("REPLACE", String.valueOf(i));
+                downloadPage(pageUrl, i);
+            } catch (Exception e) {
+            }
         }
+    }
 
-        System.out.println("Parsed page with " + an.size() + " films.");
+    private void downloadPage(String url, int i) {
+        String page = given().get(url).then().extract().response().body().asString();
+        Path p = Paths.get("src/main/resources/data/csfd/pages/csfd_page" + i + ".html");
 
-        return an;
+        writeToFile(p, page);
     }
 
     private Optional<JsonNode> parseFilmIfValid(Document doc) {
@@ -112,6 +104,7 @@ public class CSFDCrawler extends AbstractCrawler {
         on.set("hraju", getFilmActors(doc));
         on.put("obsah", getFilmContent(doc));
         on.set("rating", getFilmRating(doc));
+        on.set("komentare", getFilmComments(doc));
 
         return on;
     }
@@ -135,7 +128,8 @@ public class CSFDCrawler extends AbstractCrawler {
     private JsonNode getFilmCountries(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        String[] countries = doc.selectFirst("p[class=origin]").text().split(",")[0].split("/");
+        String[] countries = Optional.ofNullable(doc.selectFirst("p[class=origin]")).map(v -> v.text().split(",")[0].split("/"))
+                .orElse(new String[0]);
         for (String country : countries) {
             an.add(country.trim());
         }
@@ -204,13 +198,34 @@ public class CSFDCrawler extends AbstractCrawler {
         ObjectNode on = om.createObjectNode();
 
         Element rating = doc.selectFirst("div[id=rating]");
-        List<Element> meta = rating.select("meta");
-        on.put("average", rating.selectFirst("h2[class=average]").ownText());
+        if (rating != null) {
+            Optional.ofNullable(rating.selectFirst("h2[class=average]")).ifPresent(v -> on.put("average", v.ownText()));
 
-        for (Element m : meta) {
-            on.put(m.attr("itemprop"), m.attr("content"));
+            List<Element> meta = rating.select("meta");
+            for (Element m : meta) {
+                on.put(m.attr("itemprop"), m.attr("content"));
+            }
         }
 
         return on;
+    }
+
+    private JsonNode getFilmComments(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> commentsDiv = Optional.ofNullable(doc.selectFirst("div[class=content comments]"));
+        if (commentsDiv.isPresent()) {
+            List<Element> comments = commentsDiv.get().select("li");
+            for (Element comment : comments) {
+                ObjectNode on = om.createObjectNode();
+                on.put("autor", comment.selectFirst("h5[class=author]").selectFirst("a").ownText());
+                on.put("datum", comment.selectFirst("span[class=date desc]").text().replaceAll("\\(|\\)", ""));
+                on.put("obsah", comment.selectFirst("p[class=post]").text().replaceAll("\\(\\d+\\.\\d+\\.\\d+\\)$", ""));
+
+                an.add(on);
+            }
+        }
+
+        return an;
     }
 }

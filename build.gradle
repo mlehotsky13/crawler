@@ -5,6 +5,8 @@ plugins {
 ext {
 	jsoupVersion = '1.11.3'
 	jacksonVersion = '2.9.7'
+	restAssuredVersion = '3.1.1'
+	apacheCommonsVersion = '1.3.2'
 }
 
 dependencies {
@@ -15,7 +17,11 @@ dependencies {
 		
 		// Jackson
         [group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: jacksonVersion],
-        [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: jacksonVersion]
+        [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: jacksonVersion],
+        
+        [group: 'io.rest-assured', name: 'rest-assured', version: restAssuredVersion],
+        
+        [group: 'org.apache.commons', name: 'commons-io', version: apacheCommonsVersion]
 	)
 }
 

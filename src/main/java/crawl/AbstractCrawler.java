@@ -5,14 +5,32 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import org.apache.commons.io.FileUtils;
+
 public abstract class AbstractCrawler implements Crawler {
 
-    protected void writeToFile(Path p, String s) throws IOException {
+    protected void writeToFile(Path p, String s) {
 
-        System.out.println("Writing to file ...");
+        System.out.println("Writing to file " + p + " ...");
 
         try (BufferedWriter bw = Files.newBufferedWriter(p)) {
             bw.append(s);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+    }
+
+    protected String readFile(Path p) {
+        String result = "";
+
+        System.out.println("Reading file " + p + " ...");
+
+        try {
+            result = FileUtils.readFileToString(p.toFile());
+        } catch (IOException e) {
+            System.out.println("Was not able to read file " + p + ".");
+        }
+
+        return result;
     }
 }
