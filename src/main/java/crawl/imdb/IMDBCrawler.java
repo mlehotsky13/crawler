@@ -63,7 +63,7 @@ public class IMDBCrawler extends AbstractCrawler {
             }
         } finally {
             // Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
-            Path genreFile = Paths.get("/home/miroslav/Desktop/ " + genre.toLowerCase() + ".json");
+            Path genreFile = Paths.get("/home/miroslav/Desktop/" + genre.toLowerCase() + ".json");
             writeToFile(genreFile, genreTitles.toString());
         }
 
@@ -97,11 +97,15 @@ public class IMDBCrawler extends AbstractCrawler {
         getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
         getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
         getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
-        getTitleDirector(scriptNode).ifPresent(v -> on.set("director", v));
         getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
         getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
         getTitleDescription(doc).ifPresent(v -> on.put("description", v));
-        on.set("cast", getCast(doc));
+
+        Optional<Document> castDoc = getCastDoc(doc);
+        on.set("cast", getCast(castDoc));
+        on.set("writers", getWriters(castDoc));
+        on.set("directors", getDirectors(castDoc));
+        on.set("producers", getProducers(castDoc));
 
         // try {
         // Thread.currentThread().sleep(1000);
@@ -130,14 +134,6 @@ public class IMDBCrawler extends AbstractCrawler {
 
     private Optional<JsonNode> getTitleRating(JsonNode node) {
         return Optional.ofNullable(node.get("aggregateRating"));
-    }
-
-    private Optional<JsonNode> getTitleDirector(JsonNode node) {
-        return Optional.ofNullable(node.get("director"));
-    }
-
-    private Optional<JsonNode> getTitleActors(JsonNode node) {
-        return Optional.ofNullable(node.get("actor"));
     }
 
     private Optional<JsonNode> getTitleGenres(JsonNode node) {
@@ -175,12 +171,41 @@ public class IMDBCrawler extends AbstractCrawler {
                 .orElse(null);
     }
 
-    private JsonNode getCast(Document doc) throws IOException {
+    private JsonNode getCast(Optional<Document> castDoc) throws IOException {
         ArrayNode an = om.createArrayNode();
 
-        Optional<Document> castDoc = getCastDoc(doc);
         if (castDoc.isPresent()) {
             an = parseFullCast(castDoc.get());
+        }
+
+        return an;
+    }
+
+    private JsonNode getWriters(Optional<Document> castDoc) throws IOException {
+        ArrayNode an = om.createArrayNode();
+
+        if (castDoc.isPresent()) {
+            an = parseWriters(castDoc.get());
+        }
+
+        return an;
+    }
+
+    private JsonNode getDirectors(Optional<Document> castDoc) throws IOException {
+        ArrayNode an = om.createArrayNode();
+
+        if (castDoc.isPresent()) {
+            an = parseDirectors(castDoc.get());
+        }
+
+        return an;
+    }
+
+    private JsonNode getProducers(Optional<Document> castDoc) throws IOException {
+        ArrayNode an = om.createArrayNode();
+
+        if (castDoc.isPresent()) {
+            an = parseProducers(castDoc.get());
         }
 
         return an;
@@ -190,7 +215,7 @@ public class IMDBCrawler extends AbstractCrawler {
         return getFullCastURL(doc).map(v -> {
             Document castDoc = null;
             try {
-                castDoc = Jsoup.connect(v).userAgent("Mozilla/5.0").timeout(0).get();
+                castDoc = Jsoup.connect(v).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -222,8 +247,65 @@ public class IMDBCrawler extends AbstractCrawler {
         return an;
     }
 
+    private ArrayNode parseWriters(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> writersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Writing Credits)"));
+        Optional<Element> table = writersHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validWritersRows = getValidWritersRows(table.get());
+            for (Element row : validWritersRows) {
+                an.add(row.selectFirst("td").text());
+            }
+        }
+
+        return an;
+    }
+
+    private ArrayNode parseDirectors(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> directorsHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Directed by)"));
+        Optional<Element> table = directorsHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validDirectorsRows = getValidDirectorsRows(table.get());
+            for (Element row : validDirectorsRows) {
+                an.add(row.selectFirst("td").text());
+            }
+        }
+
+        return an;
+    }
+
+    private ArrayNode parseProducers(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> producersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Produced by)"));
+        Optional<Element> table = producersHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validProducersRows = getValidProducersRows(table.get());
+            for (Element row : validProducersRows) {
+                an.add(row.selectFirst("td").text());
+            }
+        }
+
+        return an;
+    }
+
     private List<Element> getValidCastRows(Element element) {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=character]") != null)
                 .collect(Collectors.toList());
+    }
+
+    private List<Element> getValidWritersRows(Element element) {
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
+    }
+
+    private List<Element> getValidDirectorsRows(Element element) {
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
+    }
+
+    private List<Element> getValidProducersRows(Element element) {
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
     }
 }
