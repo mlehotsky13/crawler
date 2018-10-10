@@ -2,14 +2,15 @@ package main;
 
 import java.io.IOException;
 
-import crawl.csfd.CSFDCrawler;
+import crawl.Crawler;
+import crawl.imdb.IMDBCrawler;
 
 public class MainClass {
     public static void main(String[] args) throws IOException, InterruptedException {
 
         long start = System.currentTimeMillis();
 
-        CSFDCrawler crawler = new CSFDCrawler();
+        Crawler crawler = new IMDBCrawler();
         crawler.crawlAndSave();
         // crawler.downloadPages();
 

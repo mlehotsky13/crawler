@@ -3,6 +3,7 @@ package crawl.imdb;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +30,8 @@ public class IMDBCrawler extends AbstractCrawler {
     private static final String ALL_GENRES =
             "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&ref_=chtmvm_gnr_1&&explore=title_type,genres";
 
-    private static final List<String> NOT_WANTED_GENRES = Arrays.asList("Action");
+    private static final List<String> NOT_WANTED_GENRES =
+            Arrays.asList("Film-Noir", "Talk-Show", "News", "Reality-TV", "Musical", "Adult", "Short", "Game-Show");
 
     private static final ObjectMapper om = new ObjectMapper();
 
@@ -39,8 +41,8 @@ public class IMDBCrawler extends AbstractCrawler {
 
         ExecutorService es = Executors.newCachedThreadPool();
         for (Element genreItem : genreItems) {
-            if (NOT_WANTED_GENRES.contains(genreItem.text())) {
-                es.submit(() -> parseGenre(genreItem.text(), genreItem.attr("abs:href"), 10));
+            if (!NOT_WANTED_GENRES.contains(genreItem.text())) {
+                es.submit(() -> parseGenre(genreItem.text(), genreItem.attr("abs:href"), 1500));
             }
         }
 
@@ -62,8 +64,7 @@ public class IMDBCrawler extends AbstractCrawler {
                 genreTitles.addAll(parseGenrePage(doc, limit));
             }
         } finally {
-            // Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
-            Path genreFile = Paths.get("/home/miroslav/Desktop/" + genre.toLowerCase() + ".json");
+            Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
             writeToFile(genreFile, genreTitles.toString());
         }
 
@@ -73,8 +74,7 @@ public class IMDBCrawler extends AbstractCrawler {
     private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
         ArrayNode genreTitles = om.createArrayNode();
 
-        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a"))
-                .collect(Collectors.toList());
+        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a")).collect(Collectors.toList());
 
         for (int i = 0; i < titles.size() && i < limit; i++) {
             genreTitles.add(parseTitle(titles.get(i).attr("abs:href")));
@@ -86,26 +86,31 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private JsonNode parseTitle(String url) throws IOException {
-        Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
-
-        Element script = doc.selectFirst("script[type=application/ld+json]");
-        JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
-
         ObjectNode on = om.createObjectNode();
-        getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
-        getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
-        getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
-        getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
-        getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
-        getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
-        getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
-        getTitleDescription(doc).ifPresent(v -> on.put("description", v));
 
-        Optional<Document> castDoc = getCastDoc(doc);
-        on.set("cast", getCast(castDoc));
-        on.set("writers", getWriters(castDoc));
-        on.set("directors", getDirectors(castDoc));
-        on.set("producers", getProducers(castDoc));
+        try {
+            Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(0).get();
+
+            Element script = doc.selectFirst("script[type=application/ld+json]");
+            JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
+
+            getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
+            getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
+            getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
+            getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
+            getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
+            getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
+            getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
+            getTitleDescription(doc).ifPresent(v -> on.put("description", v));
+
+            Optional<Document> castDoc = getCastDoc(doc);
+            on.set("cast", getCast(castDoc));
+            on.set("writers", getWriters(castDoc));
+            on.set("directors", getDirectors(castDoc));
+            on.set("producers", getProducers(castDoc));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // try {
         // Thread.currentThread().sleep(1000);
@@ -137,7 +142,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private Optional<JsonNode> getTitleGenres(JsonNode node) {
-        return Optional.ofNullable(node.get("genres"));
+        return Optional.ofNullable(node.get("genre"));
     }
 
     private Optional<JsonNode> getTitleKeywords(JsonNode node) {
@@ -155,8 +160,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private Optional<String> getFullTitleDescription(Element element) throws IOException {
-        Optional<String> fullSummaryURL =
-                Optional.ofNullable(element.selectFirst("a:contains(See full summary)")).map(v -> v.attr("abs:href"));
+        Optional<String> fullSummaryURL = Optional.ofNullable(element.selectFirst("a:contains(See full summary)")).map(v -> v.attr("abs:href"));
 
         if (fullSummaryURL.isPresent()) {
             Document summaryDoc = Jsoup.connect(fullSummaryURL.get()).userAgent("Mozilla/5.0").timeout(0).get();
@@ -167,8 +171,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private String getNextPage(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
-                .orElse(null);
+        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href")).orElse(null);
     }
 
     private JsonNode getCast(Optional<Document> castDoc) throws IOException {
@@ -293,8 +296,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private List<Element> getValidCastRows(Element element) {
-        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=character]") != null)
-                .collect(Collectors.toList());
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=character]") != null).collect(Collectors.toList());
     }
 
     private List<Element> getValidWritersRows(Element element) {
