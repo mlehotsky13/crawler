@@ -46,7 +46,7 @@ public class IMDBCrawler extends AbstractCrawler {
                 try {
                     Document genreDoc =
                             Jsoup.connect(genreItem.attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 500, 10));
+                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 10, 1));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -64,7 +64,7 @@ public class IMDBCrawler extends AbstractCrawler {
         System.out.println("Parsing genre " + genre + " ...");
 
         String nextPageURL = getNextPage(doc);
-        while ((nextPageURL = getNextPage(doc)) != null && count < limitTitles && limitPages <= page) {
+        while ((nextPageURL = getNextPage(doc)) != null && count < limitTitles && page <= limitPages) {
             try {
                 doc = Jsoup.connect(nextPageURL).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
                 parseGenrePage(doc, limitTitles);
