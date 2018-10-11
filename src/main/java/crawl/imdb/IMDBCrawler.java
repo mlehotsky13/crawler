@@ -1,6 +1,7 @@
 package crawl.imdb;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
@@ -31,8 +32,6 @@ public class IMDBCrawler extends AbstractCrawler {
     private static final List<String> NOT_WANTED_GENRES =
             Arrays.asList("Film-Noir", "Talk-Show", "News", "Reality-TV", "Musical", "Adult", "Short", "Game-Show");
 
-    private static final List<String> WANTED_GENRES = Arrays.asList("Action");
-
     private static final ObjectMapper om = new ObjectMapper();
 
     public void crawlAndSave() throws IOException, InterruptedException {
@@ -46,7 +45,7 @@ public class IMDBCrawler extends AbstractCrawler {
                 try {
                     Document genreDoc =
                             Jsoup.connect(genreItem.attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 500));
+                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 500, 10));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -57,19 +56,18 @@ public class IMDBCrawler extends AbstractCrawler {
         es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
     }
 
-    private int parseGenre(String genre, Document doc, int limit) throws IOException {
-        ArrayNode genreTitles = om.createArrayNode();
+    private int parseGenre(String genre, Document doc, int limitTitles, int limitPages) throws IOException {
+        int count = 0;
         int page = 1;
 
         System.out.println("Parsing genre " + genre + " ...");
 
-        genreTitles.addAll(parseGenrePage(doc, limit));
-
         String nextPageURL = getNextPage(doc);
-        while ((nextPageURL = getNextPage(doc)) != null && genreTitles.size() < limit && page <= 10) {
+        while ((nextPageURL = getNextPage(doc)) != null && count < limitTitles && limitPages <= page) {
             try {
                 doc = Jsoup.connect(nextPageURL).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                genreTitles.addAll(parseGenrePage(doc, limit));
+                parseGenrePage(doc, limitTitles);
+                count++;
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -77,35 +75,30 @@ public class IMDBCrawler extends AbstractCrawler {
             page++;
         }
 
-        // Path genreFile = Paths.get("src/main/resources/data/titles_" + genre.toLowerCase() + ".json");
-        // writeToFile(genreFile, genreTitles.toString());
-
-        return genreTitles.size();
+        return count;
     }
 
-    private ArrayNode parseGenrePage(Document doc, int limit) throws IOException {
-        ArrayNode genreTitles = om.createArrayNode();
-
+    private int parseGenrePage(Document doc, int limit) throws IOException {
+        int count = 0;
         List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a"))
                 .collect(Collectors.toList());
 
         for (int i = 0; i < titles.size() && i < limit; i++) {
             try {
                 doc = Jsoup.connect(titles.get(i).attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                genreTitles.add(parseTitle(doc));
+                downloadTitle(doc);
+                count++;
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
 
-        System.out.println("Parsed genre page with " + genreTitles.size() + " titles.");
+        System.out.println("Parsed genre page with " + count + " titles.");
 
-        return genreTitles;
+        return count;
     }
 
-    private JsonNode parseTitle(Document doc) throws IOException {
-        ObjectNode on = om.createObjectNode();
-
+    private void downloadTitle(Document doc) throws IOException {
         try {
             Element script = doc.selectFirst("script[type=application/ld+json]");
             JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
@@ -124,32 +117,9 @@ public class IMDBCrawler extends AbstractCrawler {
                 writeToFile(Paths.get("src/main/resources/data/imdb/pages/", titleName + "_summary.html"),
                         summaryDoc.get().toString());
 
-
-            // getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
-            // getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
-            // getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
-            // getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
-            // getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
-            // getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
-            // getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
-            // getTitleDescription(doc).ifPresent(v -> on.put("description", v));
-
-            // Optional<Document> castDoc = getCastDoc(doc);
-            // on.set("cast", getCast(castDoc));
-            // on.set("writers", getWriters(castDoc));
-            // on.set("directors", getDirectors(castDoc));
-            // on.set("producers", getProducers(castDoc));
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        // try {
-        // Thread.currentThread().sleep(1000);
-        // } catch (Exception e) {
-        // e.printStackTrace();
-        // }
-
-        return on;
     }
 
     private Optional<JsonNode> getTitleName(JsonNode node) {
