@@ -4,6 +4,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 import org.apache.commons.io.FileUtils;
 
@@ -32,5 +33,10 @@ public abstract class AbstractCrawler implements Crawler {
         }
 
         return result;
+    }
+
+    protected Optional<String> readFileOptional(Path p) {
+        String result = readFile(p);
+        return result != "" ? Optional.of(result) : Optional.empty();
     }
 }
