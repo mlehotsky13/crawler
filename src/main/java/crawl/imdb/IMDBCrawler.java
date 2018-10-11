@@ -122,6 +122,31 @@ public class IMDBCrawler extends AbstractCrawler {
         }
     }
 
+    private JsonNode parseTitle(Path p) throws IOException {
+        ObjectNode on = om.createObjectNode();
+
+        Document titleBaseDoc = Jsoup.parse(readFile(p));
+        Element script = titleBaseDoc.selectFirst("script[type=application/ld+json]");
+        JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
+
+        getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
+        getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
+        getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
+        getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
+        getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
+        getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
+        getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
+        getTitleDescription(titleBaseDoc).ifPresent(v -> on.put("description", v));
+
+        // Optional<Document> castDoc = getCastDoc(doc);
+        // on.set("cast", getCast(castDoc));
+        // on.set("writers", getWriters(castDoc));
+        // on.set("directors", getDirectors(castDoc));
+        // on.set("producers", getProducers(castDoc));
+
+        return on;
+    }
+
     private Optional<JsonNode> getTitleName(JsonNode node) {
         return Optional.ofNullable(node.get("name"));
     }
@@ -151,13 +176,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private Optional<String> getTitleDescription(Document doc) throws IOException {
-        Element descDiv = doc.selectFirst("div[class=summary_text]");
-
-        if (descDiv != null && descDiv.selectFirst("a") != null) {
-            return getFullTitleDescription(descDiv);
-        }
-
-        return Optional.ofNullable(descDiv).map(v -> v.text());
+        return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
     }
 
     private Optional<Document> getFullTitleDescriptionDoc(Element element) throws IOException {
