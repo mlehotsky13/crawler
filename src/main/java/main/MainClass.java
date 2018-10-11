@@ -1,8 +1,9 @@
 package main;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
-import crawl.Crawler;
 import crawl.imdb.IMDBCrawler;
 
 public class MainClass {
@@ -10,8 +11,12 @@ public class MainClass {
 
         long start = System.currentTimeMillis();
 
-        Crawler crawler = new IMDBCrawler();
-        crawler.crawlAndSave();
+        IMDBCrawler crawler = new IMDBCrawler();
+        
+        Path srcPath = Paths.get("/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/imdb_pages");
+        Path destPath = Paths.get("src/main/resources/data/imdb/parsed");
+
+        crawler.parseAndSaveTitles(srcPath, destPath, 100_000);
         // crawler.downloadPages();
 
         long duration = System.currentTimeMillis() - start;

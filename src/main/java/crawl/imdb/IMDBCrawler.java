@@ -123,11 +123,21 @@ public class IMDBCrawler extends AbstractCrawler {
         }
     }
 
-    public List<JsonNode> parseTitles(Path p, int limit) throws IOException {
-        return Files.walk(p, 1)
-                .filter(v -> !Files.isDirectory(v) && !v.getFileName().toString().matches(".*_summary.html|.*_cast.html"))
-                .limit(limit).map(v -> parseTitle(v)).collect(Collectors.toList());
+    public void parseAndSaveTitles(Path srcPath, Path destPath, int limit) throws IOException {
+        ArrayNode an = om.createArrayNode();
 
+        Files.walk(srcPath, 1)//
+                .filter(v -> !Files.isDirectory(v) && !v.getFileName().toString().matches(".*_summary.html|.*_cast.html"))//
+                .limit(limit)//
+                .forEach(v -> {
+                    an.add(parseTitle(v));
+
+                    if (an.size() >= 1_000) {
+                        long mill = System.currentTimeMillis();
+                        writeToFile(Paths.get(destPath.toString(), "titles_" + mill + ".json"), an.toString());
+                        an.removeAll();
+                    }
+                });
     }
 
     private JsonNode parseTitle(Path p) {
@@ -152,6 +162,9 @@ public class IMDBCrawler extends AbstractCrawler {
             on.set("writers", getWriters(castDoc));
             on.set("directors", getDirectors(castDoc));
             on.set("producers", getProducers(castDoc));
+
+            Optional<Document> summaryDoc = getSummaryDoc(p);
+            getSummary(summaryDoc).ifPresent(v -> on.put("description", v));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -202,18 +215,6 @@ public class IMDBCrawler extends AbstractCrawler {
                 return Optional.of(Jsoup.connect(fullSummaryURL.get()).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get());
             }
 
-        }
-
-        return Optional.empty();
-    }
-
-    private Optional<String> getFullTitleDescription(Element element) throws IOException {
-        Optional<String> fullSummaryURL =
-                Optional.ofNullable(element.selectFirst("a:contains(See full summary)")).map(v -> v.attr("abs:href"));
-
-        if (fullSummaryURL.isPresent()) {
-            Document summaryDoc = Jsoup.connect(fullSummaryURL.get()).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-            return Optional.of(summaryDoc.selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text());
         }
 
         return Optional.empty();
@@ -278,6 +279,21 @@ public class IMDBCrawler extends AbstractCrawler {
         return readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_cast.html")))
                 .map(v -> Jsoup.parse(v));
     }
+
+    private Optional<Document> getSummaryDoc(Path p) throws IOException {
+        return readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_summary.html")))
+                .map(v -> Jsoup.parse(v));
+    }
+
+    private Optional<String> getSummary(Optional<Document> summaryDoc) throws IOException {
+        if (summaryDoc.isPresent()) {
+            return Optional.of(summaryDoc.get().selectFirst("h4[id=summaries]").nextElementSibling().selectFirst("p").text());
+        }
+        
+        return Optional.empty();
+    }
+
+
 
     private Optional<String> getFullCastURL(Document doc) {
         return doc.select("div[class=see-more]").stream().filter(v -> v.selectFirst("a:contains(See full cast)") != null).limit(1)
@@ -362,13 +378,5 @@ public class IMDBCrawler extends AbstractCrawler {
 
     private List<Element> getValidProducersRows(Element element) {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
-    }
-
-    public static void main(String[] args) throws IOException {
-        IMDBCrawler crawler = new IMDBCrawler();
-        ArrayNode an = om.createArrayNode();
-        an.addAll(crawler.parseTitles(Paths.get("/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/imdb_pages"), 10));
-
-        System.out.println(an);
     }
 }
