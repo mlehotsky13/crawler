@@ -20,6 +20,7 @@ import org.jsoup.nodes.Element;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
@@ -159,26 +160,31 @@ public class IMDBCrawler extends AbstractCrawler {
             Element script = titleBaseDoc.selectFirst("script[type=application/ld+json]");
             JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
 
-            getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
-            getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
-            getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
-            getTitleDuration(scriptNode).ifPresent(v -> on.set("duration", v));
-            getTitleBudget(titleBaseDoc).ifPresent(v -> on.set("budget", v));
-            getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
-            getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
-            getTitleCountries(titleBaseDoc).ifPresent(v -> on.set("countries", v));
-            getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
-            getTitleDescription(titleBaseDoc).ifPresent(v -> on.put("description", v));
-            getTitleStoryLine(titleBaseDoc).ifPresent(v -> on.put("storyline", v));
+            on.set("titleName", getTitleName(scriptNode).orElse(null));
+            on.set("titleUrl", getTitleUrl(scriptNode).orElse(null));
+            on.set("titleContentRating", getTitleContentRating(scriptNode).orElse(null));
+            on.set("titleType", getTitleType(scriptNode).orElse(null));
+            on.set("titlePublishDate", getTitlePublishDate(scriptNode).orElse(null));
+            on.set("titleDuration", getTitleDuration(scriptNode).orElse(null));
+            on.set("titleBudget", getTitleBudget(titleBaseDoc).orElse(null));
+            on.set("titleRating", getTitleRating(scriptNode).orElseGet(this::getEmptyRating));
+            on.set("titleGenres", getTitleGenres(scriptNode).orElse(om.createArrayNode()));
+            on.set("titleCountries", getTitleCountries(titleBaseDoc).orElse(om.createArrayNode()));
+            on.set("titleLanguages", getTitleLanguages(titleBaseDoc).orElse(null));
+            on.set("titleKeywords", getTitleKeywords(scriptNode).orElse(null));
+            on.put("titleDescription", getTitleDescription(titleBaseDoc).orElse(null));
+            on.put("titleStoryline", getTitleStoryLine(titleBaseDoc).orElse(null));
+            on.put("titleTrivia", getTitleTrivia(titleBaseDoc).orElse(null));
+            on.put("titleGoofs", getTitleGoofs(titleBaseDoc).orElse(null));
 
             Optional<Document> castDoc = getCastDoc(p);
-            on.set("cast", getCast(castDoc));
-            on.set("writers", getWriters(castDoc));
-            on.set("directors", getDirectors(castDoc));
-            on.set("producers", getProducers(castDoc));
+            on.set("titleCast", getCast(castDoc).orElse(om.createArrayNode()));
+            on.set("titleWriters", getWriters(castDoc).orElse(om.createArrayNode()));
+            on.set("titleDirectors", getDirectors(castDoc).orElse(om.createArrayNode()));
+            on.set("titleProducers", getProducers(castDoc).orElse(om.createArrayNode()));
 
             Optional<Document> summaryDoc = getSummaryDoc(p);
-            getSummary(summaryDoc).ifPresent(v -> on.put("description", v));
+            getSummary(summaryDoc).ifPresent(v -> on.put("titleDescription", v));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -188,6 +194,14 @@ public class IMDBCrawler extends AbstractCrawler {
 
     private Optional<JsonNode> getTitleName(JsonNode node) {
         return Optional.ofNullable(node.get("name"));
+    }
+
+    private Optional<JsonNode> getTitleUrl(JsonNode node) {
+        return Optional.ofNullable(node.get("url"));
+    }
+
+    private Optional<JsonNode> getTitleContentRating(JsonNode node) {
+        return Optional.ofNullable(node.get("contentRating"));
     }
 
     private Optional<JsonNode> getTitleType(JsonNode node) {
@@ -203,7 +217,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private JsonNode getTransformedDuration(JsonNode durationNode) {
-        return om.createObjectNode().put("duration", Duration.parse(durationNode.asText()).toMillis());
+        return new LongNode(Duration.parse(durationNode.asText()).toMillis());
     }
 
     private Optional<JsonNode> getTitleBudget(Document doc) {
@@ -211,10 +225,6 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private JsonNode getTransformedBudget(Element element) {
-        // return new DoubleNode((Double)
-        // NumberFormat.getCurrencyInstance(Locale.US).parse(element.ownText()));
-        // return new DoubleNode(Double.parseDouble(element.ownText().replaceAll("\\D", "")));
-
         return new TextNode(element.ownText());
     }
 
@@ -234,7 +244,35 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private Optional<JsonNode> getTitleGenres(JsonNode node) {
-        return Optional.ofNullable(node.get("genre"));
+        return Optional.ofNullable(node.get("genre")).map(this::getTransformedTitleGenres);
+    }
+
+    private JsonNode getTransformedTitleGenres(JsonNode genresNode) {
+        if (genresNode instanceof ArrayNode) {
+            return genresNode;
+        }
+
+        return om.createArrayNode().add(genresNode.asText());
+    }
+
+    private Optional<JsonNode> getTitleCountries(Document doc) throws IOException {
+        return Optional.ofNullable(doc.selectFirst("h4:contains(Country:)"))//
+                .map(v -> getTransformedCountries(v.parent()));
+    }
+
+    private JsonNode getTransformedCountries(Element element) {
+        return om.createArrayNode()
+                .addAll(element.select("a").stream().map(v -> new TextNode(v.text())).collect(Collectors.toList()));
+    }
+
+    private Optional<JsonNode> getTitleLanguages(Document doc) throws IOException {
+        return Optional.ofNullable(doc.selectFirst("h4:contains(Language:)"))//
+                .map(v -> getTransformedLanguages(v.parent()));
+    }
+
+    private JsonNode getTransformedLanguages(Element element) {
+        return om.createArrayNode()
+                .addAll(element.select("a").stream().map(v -> new TextNode(v.text())).collect(Collectors.toList()));
     }
 
     private Optional<JsonNode> getTitleKeywords(JsonNode node) {
@@ -268,56 +306,108 @@ public class IMDBCrawler extends AbstractCrawler {
                 .map(v -> v.text());
     }
 
-    private Optional<JsonNode> getTitleCountries(Document doc) throws IOException {
-        return Optional.ofNullable(doc.selectFirst("h4:contains(Country:)"))//
-                .map(v -> getTransformedCountries(v.parent()));
+    private Optional<String> getTitleTrivia(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("div[id=trivia]")).map(v -> v.ownText().replaceAll("»", "").trim());
     }
 
-    private JsonNode getTransformedCountries(Element element) {
-        return om.createArrayNode()
-                .addAll(element.select("a").stream().map(v -> new TextNode(v.text())).collect(Collectors.toList()));
+    private Optional<String> getTitleGoofs(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("div[id=goofs]")).map(v -> v.ownText().replaceAll("»", "").trim());
     }
 
-    private String getNextPage(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
-                .orElse(null);
+    private Optional<JsonNode> getCast(Optional<Document> castDoc) throws IOException {
+        return castDoc.map(this::parseFullCast);
     }
 
-    private JsonNode getCast(Optional<Document> castDoc) throws IOException {
+    private ArrayNode parseFullCast(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        if (castDoc.isPresent()) {
-            an = parseFullCast(castDoc.get());
+        Optional<Element> table = Optional.ofNullable(doc.selectFirst("table[class=cast_list]"));
+        if (table.isPresent()) {
+            List<Element> validCastRows = getValidCastRows(table.get());
+            for (Element row : validCastRows) {
+                ObjectNode on = om.createObjectNode();
+
+                on.put("name", row.select("td").get(1).text());
+                on.put("url", row.select("td").get(1).selectFirst("a").attr("href"));
+                on.put("character", row.selectFirst("td[class=character]").text());
+
+                an.add(on);
+            }
         }
 
         return an;
     }
 
-    private JsonNode getWriters(Optional<Document> castDoc) throws IOException {
+    private Optional<JsonNode> getWriters(Optional<Document> castDoc) throws IOException {
+        return castDoc.map(this::parseWriters);
+    }
+
+    private ArrayNode parseWriters(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        if (castDoc.isPresent()) {
-            an = parseWriters(castDoc.get());
+        Optional<Element> writersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Writing Credits)"));
+        Optional<Element> table = writersHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validWritersRows = getValidWritersRows(table.get());
+            for (Element row : validWritersRows) {
+                ObjectNode on = om.createObjectNode();
+
+                on.put("name", row.selectFirst("td").text());
+                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
+                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
+
+                an.add(on);
+            }
         }
 
         return an;
     }
 
-    private JsonNode getDirectors(Optional<Document> castDoc) throws IOException {
+    private Optional<JsonNode> getDirectors(Optional<Document> castDoc) throws IOException {
+        return castDoc.map(this::parseDirectors);
+    }
+
+    private ArrayNode parseDirectors(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        if (castDoc.isPresent()) {
-            an = parseDirectors(castDoc.get());
+        Optional<Element> directorsHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Directed by)"));
+        Optional<Element> table = directorsHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validDirectorsRows = getValidDirectorsRows(table.get());
+            for (Element row : validDirectorsRows) {
+                ObjectNode on = om.createObjectNode();
+
+                on.put("name", row.selectFirst("td").text());
+                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
+                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
+
+                an.add(on);
+            }
         }
 
         return an;
     }
 
-    private JsonNode getProducers(Optional<Document> castDoc) throws IOException {
+    private Optional<JsonNode> getProducers(Optional<Document> castDoc) throws IOException {
+        return castDoc.map(this::parseProducers);
+    }
+
+    private ArrayNode parseProducers(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        if (castDoc.isPresent()) {
-            an = parseProducers(castDoc.get());
+        Optional<Element> producersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Produced by)"));
+        Optional<Element> table = producersHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validProducersRows = getValidProducersRows(table.get());
+            for (Element row : validProducersRows) {
+                ObjectNode on = om.createObjectNode();
+
+                on.put("name", row.selectFirst("td").text());
+                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
+                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
+
+                an.add(on);
+            }
         }
 
         return an;
@@ -332,6 +422,12 @@ public class IMDBCrawler extends AbstractCrawler {
 
         return Optional.empty();
     }
+
+    private Optional<String> getFullCastURL(Document doc) {
+        return doc.select("div[class=see-more]").stream().filter(v -> v.selectFirst("a:contains(See full cast)") != null).limit(1)
+                .map(v -> v.selectFirst("a").attr("abs:href")).findFirst();
+    }
+
 
     private Optional<Document> getCastDoc(Path p) throws IOException {
         return readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_cast.html")))
@@ -351,76 +447,6 @@ public class IMDBCrawler extends AbstractCrawler {
         return Optional.empty();
     }
 
-
-
-    private Optional<String> getFullCastURL(Document doc) {
-        return doc.select("div[class=see-more]").stream().filter(v -> v.selectFirst("a:contains(See full cast)") != null).limit(1)
-                .map(v -> v.selectFirst("a").attr("abs:href")).findFirst();
-    }
-
-    private ArrayNode parseFullCast(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> table = Optional.ofNullable(doc.selectFirst("table[class=cast_list]"));
-        if (table.isPresent()) {
-            List<Element> validCastRows = getValidCastRows(table.get());
-            for (Element row : validCastRows) {
-                ObjectNode on = om.createObjectNode();
-                on.put("name", row.select("td").get(1).text());
-                on.put("character", row.selectFirst("td[class=character]").text());
-
-                an.add(on);
-            }
-        }
-
-        return an;
-    }
-
-    private ArrayNode parseWriters(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> writersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Writing Credits)"));
-        Optional<Element> table = writersHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validWritersRows = getValidWritersRows(table.get());
-            for (Element row : validWritersRows) {
-                an.add(row.selectFirst("td").text());
-            }
-        }
-
-        return an;
-    }
-
-    private ArrayNode parseDirectors(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> directorsHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Directed by)"));
-        Optional<Element> table = directorsHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validDirectorsRows = getValidDirectorsRows(table.get());
-            for (Element row : validDirectorsRows) {
-                an.add(row.selectFirst("td").text());
-            }
-        }
-
-        return an;
-    }
-
-    private ArrayNode parseProducers(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> producersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Produced by)"));
-        Optional<Element> table = producersHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validProducersRows = getValidProducersRows(table.get());
-            for (Element row : validProducersRows) {
-                an.add(row.selectFirst("td").text());
-            }
-        }
-
-        return an;
-    }
-
     private List<Element> getValidCastRows(Element element) {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=character]") != null)
                 .collect(Collectors.toList());
@@ -436,5 +462,40 @@ public class IMDBCrawler extends AbstractCrawler {
 
     private List<Element> getValidProducersRows(Element element) {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
+    }
+
+    public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
+        ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
+        StringBuilder sb = new StringBuilder();
+
+        int count = 1;
+        String bulkRow = "{ \"index\" : { \"_index\" : \"test\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
+
+        for (JsonNode n : an) {
+            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(count)));
+            sb.append("\n");
+            sb.append(n.toString());
+            sb.append("\n");
+            count++;
+        }
+
+        String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
+        writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
+    }
+
+    private JsonNode getEmptyRating() {
+        ObjectNode on = om.createObjectNode();
+
+        on.set("ratingCount", null);
+        on.set("bestRating", null);
+        on.set("worstRating", null);
+        on.set("ratingValue", null);
+
+        return on;
+    }
+
+    private String getNextPage(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
+                .orElse(null);
     }
 }
