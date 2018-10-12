@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -192,7 +193,11 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private Optional<JsonNode> getTitleDuration(JsonNode node) {
-        return Optional.ofNullable(node.get("duration"));
+        return Optional.ofNullable(node.get("duration")).map(this::getTransformedDuration);
+    }
+
+    private JsonNode getTransformedDuration(JsonNode durationNode) {
+        return om.createObjectNode().put("duration", Duration.parse(durationNode.asText()).toMinutes());
     }
 
     private Optional<JsonNode> getTitleRating(JsonNode node) {
