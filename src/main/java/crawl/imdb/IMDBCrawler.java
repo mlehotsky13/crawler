@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import crawl.AbstractCrawler;
 
@@ -164,6 +165,7 @@ public class IMDBCrawler extends AbstractCrawler {
             getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
             getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
             getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
+            getTitleCountries(titleBaseDoc).ifPresent(v -> on.set("countries", v));
             getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
             getTitleDescription(titleBaseDoc).ifPresent(v -> on.put("description", v));
 
@@ -243,6 +245,16 @@ public class IMDBCrawler extends AbstractCrawler {
         }
 
         return Optional.empty();
+    }
+
+    private Optional<JsonNode> getTitleCountries(Document doc) throws IOException {
+        return Optional.ofNullable(doc.selectFirst("h4:contains(Country:)"))//
+                .map(v -> getTransformedCountries(v.parent()));
+    }
+
+    private JsonNode getTransformedCountries(Element element) {
+        return om.createArrayNode()
+                .addAll(element.select("a").stream().map(v -> new TextNode(v.text())).collect(Collectors.toList()));
     }
 
     private String getNextPage(Document doc) {
