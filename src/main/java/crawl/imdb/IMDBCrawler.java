@@ -162,12 +162,14 @@ public class IMDBCrawler extends AbstractCrawler {
             getTitleName(scriptNode).ifPresent(v -> on.set("name", v));
             getTitleType(scriptNode).ifPresent(v -> on.set("type", v));
             getTitlePublishDate(scriptNode).ifPresent(v -> on.set("datePublished", v));
-            getTitleDuration(scriptNode).ifPresent(td -> on.set("duration", td));
+            getTitleDuration(scriptNode).ifPresent(v -> on.set("duration", v));
+            getTitleBudget(titleBaseDoc).ifPresent(v -> on.set("budget", v));
             getTitleRating(scriptNode).ifPresent(v -> on.set("rating", v));
             getTitleGenres(scriptNode).ifPresent(v -> on.set("genres", v));
             getTitleCountries(titleBaseDoc).ifPresent(v -> on.set("countries", v));
             getTitleKeywords(scriptNode).ifPresent(v -> on.set("keywords", v));
             getTitleDescription(titleBaseDoc).ifPresent(v -> on.put("description", v));
+            getTitleStoryLine(titleBaseDoc).ifPresent(v -> on.put("storyline", v));
 
             Optional<Document> castDoc = getCastDoc(p);
             on.set("cast", getCast(castDoc));
@@ -202,6 +204,18 @@ public class IMDBCrawler extends AbstractCrawler {
 
     private JsonNode getTransformedDuration(JsonNode durationNode) {
         return om.createObjectNode().put("duration", Duration.parse(durationNode.asText()).toMillis());
+    }
+
+    private Optional<JsonNode> getTitleBudget(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("h4:contains(Budget:)")).map(v -> getTransformedBudget(v.parent()));
+    }
+
+    private JsonNode getTransformedBudget(Element element) {
+        // return new DoubleNode((Double)
+        // NumberFormat.getCurrencyInstance(Locale.US).parse(element.ownText()));
+        // return new DoubleNode(Double.parseDouble(element.ownText().replaceAll("\\D", "")));
+
+        return new TextNode(element.ownText());
     }
 
     private Optional<JsonNode> getTitleRating(JsonNode node) {
@@ -245,6 +259,13 @@ public class IMDBCrawler extends AbstractCrawler {
         }
 
         return Optional.empty();
+    }
+
+    private Optional<String> getTitleStoryLine(Document doc) {
+        return Optional.ofNullable(doc.selectFirst("div[id=titleStoryLine]"))//
+                .map(v -> v.selectFirst("div[class=inline canwrap]"))//
+                .map(v -> v.selectFirst("span"))//
+                .map(v -> v.text());
     }
 
     private Optional<JsonNode> getTitleCountries(Document doc) throws IOException {
