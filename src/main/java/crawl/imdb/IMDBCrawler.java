@@ -146,6 +146,8 @@ public class IMDBCrawler extends AbstractCrawler {
                         an.removeAll();
                     }
                 });
+
+        writeToFile(Paths.get(destPath.toString(), "titles_" + System.currentTimeMillis() + ".json"), an.toString());
     }
 
     private JsonNode parseTitle(Path p) {
@@ -197,7 +199,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private JsonNode getTransformedDuration(JsonNode durationNode) {
-        return om.createObjectNode().put("duration", Duration.parse(durationNode.asText()).toMinutes());
+        return om.createObjectNode().put("duration", Duration.parse(durationNode.asText()).toMillis());
     }
 
     private Optional<JsonNode> getTitleRating(JsonNode node) {
