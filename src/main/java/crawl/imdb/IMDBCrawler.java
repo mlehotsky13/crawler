@@ -31,12 +31,14 @@ public class IMDBCrawler extends AbstractCrawler {
     private static final String BASE_URL = "https://www.imdb.com/";
     private static final String SEARCH_TITLE = "search/title";
     private static final String ALL_GENRES =
-            "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&explore=title_type,genres&page=38&ref_=adv_nxt";
+            "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&explore=title_type,genres&page=111&ref_=adv_nxt";
 
     private static final List<String> NOT_WANTED_GENRES =
             Arrays.asList("Film-Noir", "Talk-Show", "News", "Reality-TV", "Musical", "Adult", "Short", "Game-Show");
 
     private static final ObjectMapper om = new ObjectMapper();
+    
+    private static int bulkId = 1;
 
     public void crawlAndSave() throws IOException, InterruptedException {
         Document doc =
@@ -49,7 +51,7 @@ public class IMDBCrawler extends AbstractCrawler {
                 try {
                     Document genreDoc =
                             Jsoup.connect(genreItem.attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 3_000, 100));
+                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 1_000, 20));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -70,13 +72,11 @@ public class IMDBCrawler extends AbstractCrawler {
         while ((nextPageURL = getNextPage(doc)) != null && count < limitTitles && page <= limitPages) {
             try {
                 doc = Jsoup.connect(nextPageURL).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                parseGenrePage(doc, limitTitles);
-                count++;
+                count += parseGenrePage(doc, limitTitles);
+                page++;
             } catch (Exception e) {
                 e.printStackTrace();
             }
-
-            page++;
         }
 
         return count;
@@ -160,31 +160,32 @@ public class IMDBCrawler extends AbstractCrawler {
             Element script = titleBaseDoc.selectFirst("script[type=application/ld+json]");
             JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
 
-            on.set("titleName", getTitleName(scriptNode).orElse(null));
-            on.set("titleUrl", getTitleUrl(scriptNode).orElse(null));
-            on.set("titleContentRating", getTitleContentRating(scriptNode).orElse(null));
-            on.set("titleType", getTitleType(scriptNode).orElse(null));
-            on.set("titlePublishDate", getTitlePublishDate(scriptNode).orElse(null));
-            on.set("titleDuration", getTitleDuration(scriptNode).orElse(null));
-            on.set("titleBudget", getTitleBudget(titleBaseDoc).orElse(null));
-            on.set("titleRating", getTitleRating(scriptNode).orElseGet(this::getEmptyRating));
-            on.set("titleGenres", getTitleGenres(scriptNode).orElse(om.createArrayNode()));
-            on.set("titleCountries", getTitleCountries(titleBaseDoc).orElse(om.createArrayNode()));
-            on.set("titleLanguages", getTitleLanguages(titleBaseDoc).orElse(null));
-            on.set("titleKeywords", getTitleKeywords(scriptNode).orElse(null));
-            on.put("titleDescription", getTitleDescription(titleBaseDoc).orElse(null));
-            on.put("titleStoryline", getTitleStoryLine(titleBaseDoc).orElse(null));
-            on.put("titleTrivia", getTitleTrivia(titleBaseDoc).orElse(null));
-            on.put("titleGoofs", getTitleGoofs(titleBaseDoc).orElse(null));
+            on.set("name", getTitleName(scriptNode).orElse(null));
+            on.set("url", getTitleUrl(scriptNode).orElse(null));
+            on.set("contentRating", getTitleContentRating(scriptNode).orElse(null));
+            on.set("type", getTitleType(scriptNode).orElse(null));
+            on.set("publishDate", getTitlePublishDate(scriptNode).orElse(null));
+            on.set("duration", getTitleDuration(scriptNode).orElse(null));
+            on.set("budget", getTitleBudget(titleBaseDoc).orElse(null));
+            on.set("rating", getTitleRating(scriptNode).orElseGet(this::getEmptyRating));
+            on.set("genres", getTitleGenres(scriptNode).orElse(om.createArrayNode()));
+            on.set("countries", getTitleCountries(titleBaseDoc).orElse(om.createArrayNode()));
+            on.set("languages", getTitleLanguages(titleBaseDoc).orElse(null));
+            on.set("keywords", getTitleKeywords(scriptNode).orElse(null));
+            on.put("description", getTitleDescription(titleBaseDoc).orElse(null));
+            on.put("storyline", getTitleStoryLine(titleBaseDoc).orElse(null));
+            on.put("trivia", getTitleTrivia(titleBaseDoc).orElse(null));
+            on.put("goofs", getTitleGoofs(titleBaseDoc).orElse(null));
 
             Optional<Document> castDoc = getCastDoc(p);
-            on.set("titleCast", getCast(castDoc).orElse(om.createArrayNode()));
-            on.set("titleWriters", getWriters(castDoc).orElse(om.createArrayNode()));
-            on.set("titleDirectors", getDirectors(castDoc).orElse(om.createArrayNode()));
-            on.set("titleProducers", getProducers(castDoc).orElse(om.createArrayNode()));
+            on.set("cast", getCast(castDoc).orElse(om.createArrayNode()));
+            on.set("writers", getWriters(castDoc).orElse(om.createArrayNode()));
+            on.set("directors", getDirectors(castDoc).orElse(om.createArrayNode()));
+            on.set("producers", getProducers(castDoc).orElse(om.createArrayNode()));
+            on.set("cameraAndElectricalDepartment", getCamera(castDoc).orElse(om.createArrayNode()));
 
             Optional<Document> summaryDoc = getSummaryDoc(p);
-            getSummary(summaryDoc).ifPresent(v -> on.put("titleDescription", v));
+            getSummary(summaryDoc).ifPresent(v -> on.put("description", v));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -370,10 +371,11 @@ public class IMDBCrawler extends AbstractCrawler {
     private ArrayNode parseDirectors(Document doc) {
         ArrayNode an = om.createArrayNode();
 
-        Optional<Element> directorsHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Directed by)"));
-        Optional<Element> table = directorsHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validDirectorsRows = getValidDirectorsRows(table.get());
+        List<Element> directorsHeadings =
+                doc.select("h4:contains(Directed by), h4:contains(Second Unit Director or Assistant Director)");
+        List<Element> tables = directorsHeadings.stream().map(Element::nextElementSibling).collect(Collectors.toList());
+        for (Element table : tables) {
+            List<Element> validDirectorsRows = getValidDirectorsRows(table);
             for (Element row : validDirectorsRows) {
                 ObjectNode on = om.createObjectNode();
 
@@ -399,6 +401,31 @@ public class IMDBCrawler extends AbstractCrawler {
         Optional<Element> table = producersHeading.map(v -> v.nextElementSibling());
         if (table.isPresent()) {
             List<Element> validProducersRows = getValidProducersRows(table.get());
+            for (Element row : validProducersRows) {
+                ObjectNode on = om.createObjectNode();
+
+                on.put("name", row.selectFirst("td").text());
+                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
+                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
+
+                an.add(on);
+            }
+        }
+
+        return an;
+    }
+
+    private Optional<JsonNode> getCamera(Optional<Document> castDoc) throws IOException {
+        return castDoc.map(this::parseCamera);
+    }
+
+    private ArrayNode parseCamera(Document doc) {
+        ArrayNode an = om.createArrayNode();
+
+        Optional<Element> cameraHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Camera and Electrical Department)"));
+        Optional<Element> table = cameraHeading.map(v -> v.nextElementSibling());
+        if (table.isPresent()) {
+            List<Element> validProducersRows = getValidCameraRows(table.get());
             for (Element row : validProducersRows) {
                 ObjectNode on = om.createObjectNode();
 
@@ -464,23 +491,39 @@ public class IMDBCrawler extends AbstractCrawler {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
     }
 
-    public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
+    private List<Element> getValidCameraRows(Element element) {
+        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
+    }
+
+    public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
+        Files.walk(srcDir, 1)//
+                .filter(v -> Files.isRegularFile(v))//
+                .forEach(v -> {
+                    try {
+                        appendToFile(destDir.resolve("titles_bulk.json"), prepareBulkJson(v, destDir));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+    }
+
+    public String prepareBulkJson(Path srcPath, Path destPath) throws IOException {
         ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
         StringBuilder sb = new StringBuilder();
 
-        int count = 1;
-        String bulkRow = "{ \"index\" : { \"_index\" : \"test\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
+        String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
 
         for (JsonNode n : an) {
-            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(count)));
+            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
             sb.append("\n");
             sb.append(n.toString());
             sb.append("\n");
-            count++;
         }
 
-        String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
-        writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
+        // String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
+        // appendToFile(destPath.resolve("titles_bulk.json"), sb.toString());
+        
+        return sb.toString();
     }
 
     private JsonNode getEmptyRating() {

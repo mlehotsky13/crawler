@@ -4,6 +4,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 
 import org.apache.commons.io.FileUtils;
@@ -15,6 +16,17 @@ public abstract class AbstractCrawler implements Crawler {
         System.out.println("Writing to file " + p + " ...");
 
         try (BufferedWriter bw = Files.newBufferedWriter(p)) {
+            bw.append(s);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    protected void appendToFile(Path p, String s) {
+        
+        System.out.println("Appending to file " + p + " ...");
+
+        try (BufferedWriter bw = Files.newBufferedWriter(p, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
             bw.append(s);
         } catch (IOException e) {
             e.printStackTrace();
