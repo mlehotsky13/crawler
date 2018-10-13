@@ -1,85 +1,44 @@
-package crawl.csfd;
+package parse;
 
-import static io.restassured.RestAssured.given;
-
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import crawl.AbstractCrawler;
+import util.IOUtils;
 
-public class CSFDCrawler extends AbstractCrawler {
-
-    private static final String FILM_URL = "https://www.csfd.cz/film/REPLACE/prehled/";
-
-    private static final ObjectMapper om = new ObjectMapper();
+public class CSFDParser extends AbstractParser {
 
     private static final String PAGES_FOLDER = "/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/csfd_pages";
 
     private static int count = 1;
 
-    public void crawlAndSave() throws InterruptedException, JsonProcessingException {
+    public void parseAll() {
         ArrayNode films = om.createArrayNode();
 
         for (int i = 1; i < 600_000; i++) {
-            String docString = readFile(Paths.get(PAGES_FOLDER, "csfd_page" + i + ".html"));
+            String docString = IOUtils.readFile(Paths.get(PAGES_FOLDER, "csfd_page" + i + ".html"));
             Document doc = Jsoup.parse(docString);
 
             parseFilmIfValid(doc).ifPresent(v -> films.add(v));
 
             if (films.size() > 999) {
-                writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"), films.toString());
+                IOUtils.writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"),
+                        films.toString());
                 films.removeAll();
                 count++;
             }
         }
 
-        writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"), films.toString());
-    }
-
-    public void downloadPages() throws InterruptedException {
-        ExecutorService es = Executors.newCachedThreadPool();
-
-        es.submit(() -> downloadPagesFromTo(500_000, 520_000));
-        es.submit(() -> downloadPagesFromTo(520_000, 540_000));
-        es.submit(() -> downloadPagesFromTo(540_000, 560_000));
-        es.submit(() -> downloadPagesFromTo(560_000, 580_000));
-        es.submit(() -> downloadPagesFromTo(580_000, 600_000));
-
-        es.shutdown();
-        es.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
-    }
-
-    private void downloadPagesFromTo(int from, int to) {
-        for (int i = from; i < to; i++) {
-            try {
-                String pageUrl = FILM_URL.replace("REPLACE", String.valueOf(i));
-                downloadPage(pageUrl, i);
-            } catch (Exception e) {
-            }
-        }
-    }
-
-    private void downloadPage(String url, int i) {
-        String page = given().get(url).then().extract().response().body().asString();
-        Path p = Paths.get("src/main/resources/data/csfd/pages/csfd_page" + i + ".html");
-
-        writeToFile(p, page);
+        IOUtils.writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"), films.toString());
     }
 
     private Optional<JsonNode> parseFilmIfValid(Document doc) {
@@ -90,6 +49,7 @@ public class CSFDCrawler extends AbstractCrawler {
         return Optional.ofNullable(doc.selectFirst("span[class=film-type]"))
                 .map(v -> !Arrays.asList("(epizoda)", "(série)").contains(v.ownText())).orElse(true);
     }
+
 
     private JsonNode parseFilm(Document doc) {
         ObjectNode on = om.createObjectNode();
@@ -108,6 +68,7 @@ public class CSFDCrawler extends AbstractCrawler {
 
         return on;
     }
+
 
     private String getFilmName(Document doc) {
         return Optional.ofNullable(doc.selectFirst("h1[itemprop=name]")).map(v -> v.ownText()).orElse("");

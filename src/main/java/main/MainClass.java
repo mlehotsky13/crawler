@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import crawl.imdb.IMDBCrawler;
+import crawl.IMDBCrawler;
 
 public class MainClass {
     public static void main(String[] args) throws IOException, InterruptedException {

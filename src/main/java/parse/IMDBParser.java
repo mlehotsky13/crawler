@@ -1,7 +1,6 @@
-package crawl.imdb;
+package parse;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -9,135 +8,26 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
-import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import crawl.AbstractCrawler;
+import util.IOUtils;
 
-public class IMDBCrawler extends AbstractCrawler {
-
-    private static final String BASE_URL = "https://www.imdb.com/";
-    private static final String SEARCH_TITLE = "search/title";
-    private static final String ALL_GENRES =
-            "?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=b9121fa8-b7bb-4a3e-8887-aab822e0b5a7&pf_rd_r=4VPVFKZNBXANDZCFN972&pf_rd_s=right-6&pf_rd_t=15506&pf_rd_i=moviemeter&explore=title_type,genres&page=111&ref_=adv_nxt";
-
-    private static final List<String> NOT_WANTED_GENRES =
-            Arrays.asList("Film-Noir", "Talk-Show", "News", "Reality-TV", "Musical", "Adult", "Short", "Game-Show");
-
-    private static final ObjectMapper om = new ObjectMapper();
+public class IMDBParser extends AbstractParser {
 
     private static int bulkId = 1;
-
-    public void crawlAndSave() throws IOException, InterruptedException {
-        Document doc =
-                Jsoup.connect(BASE_URL + SEARCH_TITLE + ALL_GENRES).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-        List<Element> genreItems = doc.selectFirst("h3:contains(Genres)").nextElementSibling().select("a");
-
-        ExecutorService es = Executors.newFixedThreadPool(5);
-        for (Element genreItem : genreItems) {
-            if (!NOT_WANTED_GENRES.contains(genreItem.text())) {
-                try {
-                    Document genreDoc =
-                            Jsoup.connect(genreItem.attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                    es.submit(() -> new IMDBCrawler().parseGenre(genreItem.text(), genreDoc, 1_000, 20));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        es.shutdown();
-        es.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-    }
-
-    private int parseGenre(String genre, Document doc, int limitTitles, int limitPages) {
-        int count = 0;
-        int page = 1;
-
-        System.out.println("Parsing genre " + genre + " ...");
-
-        String nextPageURL = getNextPage(doc);
-        while ((nextPageURL = getNextPage(doc)) != null && count < limitTitles && page <= limitPages) {
-            try {
-                doc = Jsoup.connect(nextPageURL).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                count += parseGenrePage(doc, limitTitles);
-                page++;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        return count;
-    }
-
-    private int parseGenrePage(Document doc, int limit) {
-        int count = 0;
-        List<Element> titles = doc.select("div[class=lister-item mode-advanced]").stream().map(div -> div.selectFirst("a"))
-                .collect(Collectors.toList());
-
-        for (int i = 0; i < titles.size() && i < limit; i++) {
-            try {
-                doc = Jsoup.connect(titles.get(i).attr("abs:href")).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get();
-                downloadTitle(doc);
-                count++;
-            } catch (Exception e) {
-                e.printStackTrace();
-                i--;
-
-                try {
-                    Thread.currentThread().sleep(2000);
-                } catch (InterruptedException e1) {
-                    e1.printStackTrace();
-                }
-            }
-        }
-
-        System.out.println("Parsed genre page with " + count + " titles.");
-
-        return count;
-    }
-
-    private void downloadTitle(Document doc) {
-        try {
-            Element script = doc.selectFirst("script[type=application/ld+json]");
-            JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
-
-            Optional<Document> castDoc = getCastDoc(doc);
-            Optional<Document> summaryDoc = getFullTitleDescriptionDoc(doc);
-
-            String titleName = getTitleName(scriptNode).map(v -> v.textValue()).orElse("Unknown_" + System.currentTimeMillis());
-            titleName = titleName.replaceAll("/", "").replaceAll(" ", "_");
-
-            writeToFile(Paths.get("src/main/resources/data/imdb/pages/", titleName + ".html"), doc.toString());
-
-            if (castDoc.isPresent())
-                writeToFile(Paths.get("src/main/resources/data/imdb/pages/", titleName + "_cast.html"), castDoc.get().toString());
-            if (summaryDoc.isPresent())
-                writeToFile(Paths.get("src/main/resources/data/imdb/pages/", titleName + "_summary.html"),
-                        summaryDoc.get().toString());
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    
+    public void parseAll() {
+        
     }
 
     public void parseAndSaveTitles(Path srcPath, Path destPath, int limit) throws IOException {
@@ -151,19 +41,19 @@ public class IMDBCrawler extends AbstractCrawler {
 
                     if (an.size() >= 1_000) {
                         long mill = System.currentTimeMillis();
-                        writeToFile(Paths.get(destPath.toString(), "titles_" + mill + ".json"), an.toString());
+                        IOUtils.writeToFile(Paths.get(destPath.toString(), "titles_" + mill + ".json"), an.toString());
                         an.removeAll();
                     }
                 });
 
-        writeToFile(Paths.get(destPath.toString(), "titles_" + System.currentTimeMillis() + ".json"), an.toString());
+        IOUtils.writeToFile(Paths.get(destPath.toString(), "titles_" + System.currentTimeMillis() + ".json"), an.toString());
     }
 
     private JsonNode parseTitle(Path p) {
         ObjectNode on = om.createObjectNode();
 
         try {
-            Document titleBaseDoc = Jsoup.parse(readFile(p));
+            Document titleBaseDoc = Jsoup.parse(IOUtils.readFile(p));
             Element script = titleBaseDoc.selectFirst("script[type=application/ld+json]");
             JsonNode scriptNode = om.readTree(script.dataNodes().get(0).toString());
 
@@ -203,6 +93,7 @@ public class IMDBCrawler extends AbstractCrawler {
     private Optional<JsonNode> getTitleName(JsonNode node) {
         return Optional.ofNullable(node.get("name"));
     }
+
 
     private Optional<JsonNode> getTitleUrl(JsonNode node) {
         return Optional.ofNullable(node.get("url"));
@@ -291,21 +182,6 @@ public class IMDBCrawler extends AbstractCrawler {
         return Optional.ofNullable(doc.selectFirst("div[class=summary_text]")).map(v -> v.text());
     }
 
-    private Optional<Document> getFullTitleDescriptionDoc(Element element) throws IOException {
-        Element summaryDiv = element.selectFirst("div[class=summary_text]");
-
-        if (summaryDiv != null) {
-            Optional<String> fullSummaryURL =
-                    Optional.ofNullable(summaryDiv.selectFirst("a:contains(See full summary)")).map(v -> v.attr("abs:href"));
-
-            if (fullSummaryURL.isPresent()) {
-                return Optional.of(Jsoup.connect(fullSummaryURL.get()).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get());
-            }
-
-        }
-
-        return Optional.empty();
-    }
 
     private Optional<String> getTitleStoryLine(Document doc) {
         return Optional.ofNullable(doc.selectFirst("div[id=titleStoryLine]"))//
@@ -401,29 +277,13 @@ public class IMDBCrawler extends AbstractCrawler {
         return an;
     }
 
-    private Optional<Document> getCastDoc(Document doc) throws IOException {
-        Optional<String> fullCastURL = getFullCastURL(doc);
-
-        if (fullCastURL.isPresent()) {
-            return Optional.of(Jsoup.connect(fullCastURL.get()).userAgent("Mozilla/5.0").maxBodySize(0).timeout(0).get());
-        }
-
-        return Optional.empty();
-    }
-
-    private Optional<String> getFullCastURL(Document doc) {
-        return doc.select("div[class=see-more]").stream().filter(v -> v.selectFirst("a:contains(See full cast)") != null).limit(1)
-                .map(v -> v.selectFirst("a").attr("abs:href")).findFirst();
-    }
-
-
     private Optional<Document> getCastDoc(Path p) throws IOException {
-        return readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_cast.html")))
+        return IOUtils.readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_cast.html")))
                 .map(v -> Jsoup.parse(v));
     }
 
     private Optional<Document> getSummaryDoc(Path p) throws IOException {
-        return readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_summary.html")))
+        return IOUtils.readFileOptional(p.resolveSibling(p.getFileName().toString().replaceAll(".html", "_summary.html")))
                 .map(v -> Jsoup.parse(v));
     }
 
@@ -455,60 +315,57 @@ public class IMDBCrawler extends AbstractCrawler {
         return on;
     }
 
-    private String getNextPage(Document doc) {
-        return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
-                .orElse(null);
-    }
 
-    public void loadBulksToElastic(Path srcDir) throws IOException {
-
-        TransportClient client = new PreBuiltTransportClient(Settings.EMPTY)
-                .addTransportAddress(new TransportAddress(InetAddress.getByName("localhost"), 9300));
-
-        Files.walk(srcDir, 1)//
-                .filter(v -> Files.isRegularFile(v))//
-                .forEach(v -> {
-                    BulkRequestBuilder bulkRequest = client.prepareBulk();
-                    try {
-                        byte[] fileBytes = readFile(v).getBytes();
-                        bulkRequest.add(fileBytes, 0, fileBytes.length, XContentType.JSON);
-                        bulkRequest.execute();
-
-                        Thread.currentThread().sleep(5000);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-
-        client.close();
-    }
-
-    public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
-        Files.walk(srcDir, 1)//
-                .filter(v -> Files.isRegularFile(v))//
-                .forEach(v -> {
-                    try {
-                        prepareBulkJson(v, destDir);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-    }
-
-    public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
-        ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
-        StringBuilder sb = new StringBuilder();
-
-        String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
-
-        for (JsonNode n : an) {
-            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
-            sb.append("\n");
-            sb.append(n.toString());
-            sb.append("\n");
-        }
-
-        String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
-        writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
-    }
+    // public void loadBulksToElastic(Path srcDir) throws IOException {
+    //
+    // TransportClient client = new PreBuiltTransportClient(Settings.EMPTY)
+    // .addTransportAddress(new TransportAddress(InetAddress.getByName("localhost"), 9300));
+    //
+    // Files.walk(srcDir, 1)//
+    // .filter(v -> Files.isRegularFile(v))//
+    // .forEach(v -> {
+    // BulkRequestBuilder bulkRequest = client.prepareBulk();
+    // try {
+    // byte[] fileBytes = readFile(v).getBytes();
+    // bulkRequest.add(fileBytes, 0, fileBytes.length, XContentType.JSON);
+    // bulkRequest.execute();
+    //
+    // Thread.currentThread().sleep(5000);
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // }
+    // });
+    //
+    // client.close();
+    // }
+    //
+    // public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
+    // Files.walk(srcDir, 1)//
+    // .filter(v -> Files.isRegularFile(v))//
+    // .forEach(v -> {
+    // try {
+    // prepareBulkJson(v, destDir);
+    // } catch (IOException e) {
+    // e.printStackTrace();
+    // }
+    // });
+    // }
+    //
+    // public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
+    // ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
+    // StringBuilder sb = new StringBuilder();
+    //
+    // String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" :
+    // \"REPLACE\" } }";
+    //
+    // for (JsonNode n : an) {
+    // sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
+    // sb.append("\n");
+    // sb.append(n.toString());
+    // sb.append("\n");
+    // }
+    //
+    // String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
+    // writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
+    // }
 }
