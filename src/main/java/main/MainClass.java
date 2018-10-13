@@ -1,29 +1,22 @@
 package main;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
+import crawl.Crawler;
 import crawl.IMDBCrawler;
+import parse.IMDBParser;
+import parse.Parser;
 
 public class MainClass {
     public static void main(String[] args) throws IOException, InterruptedException {
 
         long start = System.currentTimeMillis();
 
-        IMDBCrawler crawler = new IMDBCrawler();
-        
-        Path srcPath = Paths.get("/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/imdb_pages_test");
-        Path destPath = Paths.get("src/main/resources/data/imdb/parsed");
+        Crawler crawler = new IMDBCrawler();
+        Parser parser = new IMDBParser();
 
-        // Path srcPath = Paths.get("src/main/resources/data/imdb/parsed/");
-        // Path srcPath = Paths.get("src/main/resources/data/imdb/bulk/");
-        // Path destPath = Paths.get("src/main/resources/data/imdb/bulk");
-
-        // crawler.loadBulksToElastic(srcPath);
-        // crawler.prepareBulkJsons(srcPath, destPath);
-        // crawler.parseAndSaveTitles(srcPath, destPath, 1_000_000);
         // crawler.crawlAndSave();
+        parser.parseAll();
 
         long duration = System.currentTimeMillis() - start;
 

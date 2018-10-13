@@ -15,10 +15,13 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import util.IOUtils;
 
 public class IMDBCrawler implements Crawler {
+    
+    private static final ObjectMapper om = new ObjectMapper();
 
     private static final String BASE_URL = "https://www.imdb.com/";
     private static final String SEARCH_TITLE = "search/title";
