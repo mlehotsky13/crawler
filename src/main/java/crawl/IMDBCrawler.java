@@ -18,7 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import util.IOUtils;
 
-public class IMDBCrawler extends AbstractCrawler {
+public class IMDBCrawler implements Crawler {
 
     private static final String BASE_URL = "https://www.imdb.com/";
     private static final String SEARCH_TITLE = "search/title";

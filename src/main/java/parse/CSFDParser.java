@@ -1,5 +1,7 @@
 package parse;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
@@ -10,29 +12,37 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import util.IOUtils;
 
-public class CSFDParser extends AbstractParser {
+public class CSFDParser implements Parser {
 
-    private static final String PAGES_FOLDER = "/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/csfd_pages";
+    private static final ObjectMapper om = new ObjectMapper();
 
     private static int count = 1;
 
-    public void parseAll() {
+    @Override
+    public void parseAll() throws IOException {
+        Path srcPath = Paths.get("/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/csfd_pages");
+        Path destPath = Paths.get("src/main/resources/data/csfd/parsed");
+
+        parseAndSaveFilms(srcPath, destPath, 600_000);
+    }
+
+    public void parseAndSaveFilms(Path srcPath, Path destPath, int limit) throws IOException {
         ArrayNode films = om.createArrayNode();
 
-        for (int i = 1; i < 600_000; i++) {
-            String docString = IOUtils.readFile(Paths.get(PAGES_FOLDER, "csfd_page" + i + ".html"));
+        for (int i = 1; i < limit; i++) {
+            String docString = IOUtils.readFile(srcPath.resolve("csfd_page" + i + ".html"));
             Document doc = Jsoup.parse(docString);
 
             parseFilmIfValid(doc).ifPresent(v -> films.add(v));
 
             if (films.size() > 999) {
-                IOUtils.writeToFile(Paths.get("src/main/resources/data/csfd/parsed/csfd_films_" + count + ".json"),
-                        films.toString());
+                IOUtils.writeToFile(destPath.resolve("csfd_films_" + count + ".json"), films.toString());
                 films.removeAll();
                 count++;
             }

@@ -15,6 +15,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -22,12 +23,16 @@ import com.fasterxml.jackson.databind.node.TextNode;
 
 import util.IOUtils;
 
-public class IMDBParser extends AbstractParser {
-
-    private static int bulkId = 1;
+public class IMDBParser implements Parser {
     
-    public void parseAll() {
+    private static final ObjectMapper om = new ObjectMapper();
+    
+    @Override
+    public void parseAll() throws IOException {
+        Path srcPath = Paths.get("/home/miroslav/Desktop/SKOLA/FIIT_STUBA/Ing/3.semester/VINF_I/imdb_pages");
+        Path destPath = Paths.get("src/main/resources/data/imdb/parsed");
         
+        parseAndSaveTitles(srcPath, destPath, 1_000_000);
     }
 
     public void parseAndSaveTitles(Path srcPath, Path destPath, int limit) throws IOException {
@@ -314,58 +319,4 @@ public class IMDBParser extends AbstractParser {
 
         return on;
     }
-
-
-    // public void loadBulksToElastic(Path srcDir) throws IOException {
-    //
-    // TransportClient client = new PreBuiltTransportClient(Settings.EMPTY)
-    // .addTransportAddress(new TransportAddress(InetAddress.getByName("localhost"), 9300));
-    //
-    // Files.walk(srcDir, 1)//
-    // .filter(v -> Files.isRegularFile(v))//
-    // .forEach(v -> {
-    // BulkRequestBuilder bulkRequest = client.prepareBulk();
-    // try {
-    // byte[] fileBytes = readFile(v).getBytes();
-    // bulkRequest.add(fileBytes, 0, fileBytes.length, XContentType.JSON);
-    // bulkRequest.execute();
-    //
-    // Thread.currentThread().sleep(5000);
-    // } catch (Exception e) {
-    // e.printStackTrace();
-    // }
-    // });
-    //
-    // client.close();
-    // }
-    //
-    // public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
-    // Files.walk(srcDir, 1)//
-    // .filter(v -> Files.isRegularFile(v))//
-    // .forEach(v -> {
-    // try {
-    // prepareBulkJson(v, destDir);
-    // } catch (IOException e) {
-    // e.printStackTrace();
-    // }
-    // });
-    // }
-    //
-    // public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
-    // ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
-    // StringBuilder sb = new StringBuilder();
-    //
-    // String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" :
-    // \"REPLACE\" } }";
-    //
-    // for (JsonNode n : an) {
-    // sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
-    // sb.append("\n");
-    // sb.append(n.toString());
-    // sb.append("\n");
-    // }
-    //
-    // String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
-    // writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
-    // }
 }

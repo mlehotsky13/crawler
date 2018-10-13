@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 import util.IOUtils;
 
-public class CSFDCrawler extends AbstractCrawler {
+public class CSFDCrawler implements Crawler {
 
     private static final String FILM_URL = "https://www.csfd.cz/film/REPLACE/prehled/";
 

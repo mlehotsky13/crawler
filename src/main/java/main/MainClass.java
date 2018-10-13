@@ -22,7 +22,7 @@ public class MainClass {
 
         // crawler.loadBulksToElastic(srcPath);
         // crawler.prepareBulkJsons(srcPath, destPath);
-        crawler.parseAndSaveTitles(srcPath, destPath, 1_000_000);
+        // crawler.parseAndSaveTitles(srcPath, destPath, 1_000_000);
         // crawler.crawlAndSave();
 
         long duration = System.currentTimeMillis() - start;
