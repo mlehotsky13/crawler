@@ -4,12 +4,15 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.Optional;
 
 import org.apache.commons.io.FileUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public abstract class AbstractCrawler implements Crawler {
+
+    protected static final ObjectMapper om = new ObjectMapper();
 
     protected void writeToFile(Path p, String s) {
 
@@ -22,17 +25,6 @@ public abstract class AbstractCrawler implements Crawler {
         }
     }
     
-    protected void appendToFile(Path p, String s) {
-        
-        System.out.println("Appending to file " + p + " ...");
-
-        try (BufferedWriter bw = Files.newBufferedWriter(p, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-            bw.append(s);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     protected String readFile(Path p) {
         String result = "";
 

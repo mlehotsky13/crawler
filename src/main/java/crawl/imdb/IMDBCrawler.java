@@ -1,6 +1,7 @@
 package crawl.imdb;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,6 +14,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -37,7 +44,7 @@ public class IMDBCrawler extends AbstractCrawler {
             Arrays.asList("Film-Noir", "Talk-Show", "News", "Reality-TV", "Musical", "Adult", "Short", "Game-Show");
 
     private static final ObjectMapper om = new ObjectMapper();
-    
+
     private static int bulkId = 1;
 
     public void crawlAndSave() throws IOException, InterruptedException {
@@ -344,24 +351,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private ArrayNode parseWriters(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> writersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Writing Credits)"));
-        Optional<Element> table = writersHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validWritersRows = getValidWritersRows(table.get());
-            for (Element row : validWritersRows) {
-                ObjectNode on = om.createObjectNode();
-
-                on.put("name", row.selectFirst("td").text());
-                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
-                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
-
-                an.add(on);
-            }
-        }
-
-        return an;
+        return parseOtherCast(doc, "Writing Credits");
     }
 
     private Optional<JsonNode> getDirectors(Optional<Document> castDoc) throws IOException {
@@ -369,25 +359,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private ArrayNode parseDirectors(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        List<Element> directorsHeadings =
-                doc.select("h4:contains(Directed by), h4:contains(Second Unit Director or Assistant Director)");
-        List<Element> tables = directorsHeadings.stream().map(Element::nextElementSibling).collect(Collectors.toList());
-        for (Element table : tables) {
-            List<Element> validDirectorsRows = getValidDirectorsRows(table);
-            for (Element row : validDirectorsRows) {
-                ObjectNode on = om.createObjectNode();
-
-                on.put("name", row.selectFirst("td").text());
-                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
-                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
-
-                an.add(on);
-            }
-        }
-
-        return an;
+        return parseOtherCast(doc, "Directed by", "Second Unit Director or Assistant Director");
     }
 
     private Optional<JsonNode> getProducers(Optional<Document> castDoc) throws IOException {
@@ -395,24 +367,7 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private ArrayNode parseProducers(Document doc) {
-        ArrayNode an = om.createArrayNode();
-
-        Optional<Element> producersHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Produced by)"));
-        Optional<Element> table = producersHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validProducersRows = getValidProducersRows(table.get());
-            for (Element row : validProducersRows) {
-                ObjectNode on = om.createObjectNode();
-
-                on.put("name", row.selectFirst("td").text());
-                on.put("url", row.selectFirst("td").selectFirst("a").attr("href"));
-                on.put("credit", Optional.ofNullable(row.selectFirst("td[class=credit]")).map(Element::text).orElse(null));
-
-                an.add(on);
-            }
-        }
-
-        return an;
+        return parseOtherCast(doc, "Produced by");
     }
 
     private Optional<JsonNode> getCamera(Optional<Document> castDoc) throws IOException {
@@ -420,13 +375,19 @@ public class IMDBCrawler extends AbstractCrawler {
     }
 
     private ArrayNode parseCamera(Document doc) {
+        return parseOtherCast(doc, "Camera and Electrical Department");
+    }
+
+    private ArrayNode parseOtherCast(Document doc, String... headings) {
         ArrayNode an = om.createArrayNode();
 
-        Optional<Element> cameraHeading = Optional.ofNullable(doc.selectFirst("h4:contains(Camera and Electrical Department)"));
-        Optional<Element> table = cameraHeading.map(v -> v.nextElementSibling());
-        if (table.isPresent()) {
-            List<Element> validProducersRows = getValidCameraRows(table.get());
-            for (Element row : validProducersRows) {
+        String selector = Arrays.asList(headings).stream().map(v -> "h4:contains(" + v + ")").collect(Collectors.joining(", "));
+        List<Element> headingElements = doc.select(selector);
+        List<Element> tables = headingElements.stream().map(Element::nextElementSibling).collect(Collectors.toList());
+
+        for (Element table : tables) {
+            List<Element> validRows = getValidOtherCastRows(table);
+            for (Element row : validRows) {
                 ObjectNode on = om.createObjectNode();
 
                 on.put("name", row.selectFirst("td").text());
@@ -479,51 +440,8 @@ public class IMDBCrawler extends AbstractCrawler {
                 .collect(Collectors.toList());
     }
 
-    private List<Element> getValidWritersRows(Element element) {
+    private List<Element> getValidOtherCastRows(Element element) {
         return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
-    }
-
-    private List<Element> getValidDirectorsRows(Element element) {
-        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
-    }
-
-    private List<Element> getValidProducersRows(Element element) {
-        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
-    }
-
-    private List<Element> getValidCameraRows(Element element) {
-        return element.select("tr").stream().filter(v -> v.selectFirst("td[class=name]") != null).collect(Collectors.toList());
-    }
-
-    public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
-        Files.walk(srcDir, 1)//
-                .filter(v -> Files.isRegularFile(v))//
-                .forEach(v -> {
-                    try {
-                        appendToFile(destDir.resolve("titles_bulk.json"), prepareBulkJson(v, destDir));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                });
-    }
-
-    public String prepareBulkJson(Path srcPath, Path destPath) throws IOException {
-        ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
-        StringBuilder sb = new StringBuilder();
-
-        String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
-
-        for (JsonNode n : an) {
-            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
-            sb.append("\n");
-            sb.append(n.toString());
-            sb.append("\n");
-        }
-
-        // String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
-        // appendToFile(destPath.resolve("titles_bulk.json"), sb.toString());
-        
-        return sb.toString();
     }
 
     private JsonNode getEmptyRating() {
@@ -540,5 +458,57 @@ public class IMDBCrawler extends AbstractCrawler {
     private String getNextPage(Document doc) {
         return Optional.ofNullable(doc.selectFirst("a[class=lister-page-next next-page]")).map(v -> v.attr("abs:href"))
                 .orElse(null);
+    }
+
+    public void loadBulksToElastic(Path srcDir) throws IOException {
+
+        TransportClient client = new PreBuiltTransportClient(Settings.EMPTY)
+                .addTransportAddress(new TransportAddress(InetAddress.getByName("localhost"), 9300));
+
+        Files.walk(srcDir, 1)//
+                .filter(v -> Files.isRegularFile(v))//
+                .forEach(v -> {
+                    BulkRequestBuilder bulkRequest = client.prepareBulk();
+                    try {
+                        byte[] fileBytes = readFile(v).getBytes();
+                        bulkRequest.add(fileBytes, 0, fileBytes.length, XContentType.JSON);
+                        bulkRequest.execute();
+
+                        Thread.currentThread().sleep(5000);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+
+        client.close();
+    }
+
+    public void prepareBulkJsons(Path srcDir, Path destDir) throws IOException {
+        Files.walk(srcDir, 1)//
+                .filter(v -> Files.isRegularFile(v))//
+                .forEach(v -> {
+                    try {
+                        prepareBulkJson(v, destDir);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+    }
+
+    public void prepareBulkJson(Path srcPath, Path destPath) throws IOException {
+        ArrayNode an = (ArrayNode) om.readTree(readFile(srcPath));
+        StringBuilder sb = new StringBuilder();
+
+        String bulkRow = "{ \"index\" : { \"_index\" : \"title\", \"_type\" : \"_doc\", \"_id\" : \"REPLACE\" } }";
+
+        for (JsonNode n : an) {
+            sb.append(bulkRow.replaceAll("REPLACE", String.valueOf(bulkId++)));
+            sb.append("\n");
+            sb.append(n.toString());
+            sb.append("\n");
+        }
+
+        String fileName = srcPath.getFileName().toString().replaceAll(".json", "");
+        writeToFile(destPath.resolve(fileName + "_bulk.json"), sb.toString());
     }
 }
