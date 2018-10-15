@@ -1,4 +1,4 @@
-package parse;
+package sk.stuba.fiit.parse;
 
 import java.io.IOException;
 

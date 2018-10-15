@@ -1,4 +1,4 @@
-package util;
+package sk.stuba.fiit.util;
 
 import java.io.BufferedWriter;
 import java.io.IOException;

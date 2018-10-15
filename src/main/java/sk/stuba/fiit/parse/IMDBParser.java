@@ -1,4 +1,4 @@
-package parse;
+package sk.stuba.fiit.parse;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import util.IOUtils;
+import sk.stuba.fiit.util.IOUtils;
 
 public class IMDBParser implements Parser {
     

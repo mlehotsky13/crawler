@@ -1,4 +1,4 @@
-package parse;
+package sk.stuba.fiit.parse;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -16,7 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import util.IOUtils;
+import sk.stuba.fiit.util.IOUtils;
 
 public class CSFDParser implements Parser {
 

@@ -1,4 +1,4 @@
-package crawl;
+package sk.stuba.fiit.crawl;
 
 import java.io.IOException;
 

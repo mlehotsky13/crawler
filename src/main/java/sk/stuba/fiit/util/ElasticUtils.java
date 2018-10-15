@@ -1,4 +1,4 @@
-package util;
+package sk.stuba.fiit.util;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -36,7 +36,7 @@ public class ElasticUtils {
                         bulkRequest.add(fileBytes, 0, fileBytes.length, XContentType.JSON);
                         bulkRequest.execute();
 
-                        Thread.currentThread().sleep(5000);
+                        Thread.currentThread().sleep(5_000);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }

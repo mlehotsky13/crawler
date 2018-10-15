@@ -1,4 +1,4 @@
-package crawl;
+package sk.stuba.fiit.crawl;
 
 import static io.restassured.RestAssured.given;
 
@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import util.IOUtils;
+import sk.stuba.fiit.util.IOUtils;
 
 public class CSFDCrawler implements Crawler {
 

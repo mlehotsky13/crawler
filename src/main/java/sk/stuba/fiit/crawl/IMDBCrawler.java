@@ -1,4 +1,4 @@
-package crawl;
+package sk.stuba.fiit.crawl;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -17,7 +17,7 @@ import org.jsoup.nodes.Element;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import util.IOUtils;
+import sk.stuba.fiit.util.IOUtils;
 
 public class IMDBCrawler implements Crawler {
     
