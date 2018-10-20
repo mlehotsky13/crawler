@@ -28,7 +28,6 @@ dependencies {
 
 		// Elasticsearch client
         [group: 'org.elasticsearch.client', name: 'transport', version: elasticClientVersion]
-        
 	)
 }
 

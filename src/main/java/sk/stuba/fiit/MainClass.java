@@ -19,8 +19,8 @@ public class MainClass {
         
         ElasticUtils utils = new ElasticUtils();
         
-        Path srcPath = Paths.get("src/main/resources/data/imdb/parsed");
-        Path destPath = Paths.get("src/main/resources/data/imdb/bulk");
+        // Path srcPath = Paths.get("src/main/resources/data/imdb/parsed_test");
+        // Path destPath = Paths.get("src/main/resources/data/imdb/bulk_test");
 
         // utils.prepareBulkJsons(srcPath, destPath);
         utils.loadBulksToElastic(Paths.get("src/main/resources/data/imdb/bulk"));
